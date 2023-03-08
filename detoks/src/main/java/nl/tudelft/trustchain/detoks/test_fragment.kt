@@ -26,7 +26,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
-    lateinit var trustchainInstance: TrustChainCommunity
+    lateinit var trustchainInstance: DetoksTrustChainCommunity
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -92,7 +92,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         Thread {
 
-            val trustChainCommunity = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()
+            val trustChainCommunity = IPv8Android.getInstance().getOverlay<DetoksTrustChainCommunity>()
             if (trustChainCommunity != null) {
                 while (true) {
 
