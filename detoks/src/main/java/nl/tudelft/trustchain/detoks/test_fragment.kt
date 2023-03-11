@@ -43,20 +43,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
 
-
-//        val luukCommunity = OverlayConfiguration(
-//            Overlay.Factory(LuukCommunity::class.java),
-//            listOf(RandomWalk.Factory())
-//        )
-
-//        val configuration = IPv8Configuration(overlays=listOf(luukCommunity))
-
-//        System.out.println("Application returns " + Application())
-//        System.out.println("Context is " + context.toString())
-
-//        activity?.let { IPv8Android.Factory(it.application).setConfiguration(configuration).setPrivateKey(getPrivateKey(requireContext())).init() }
-
-        //Do the trustchain things
+        // Do the trustchain things
         val settings = TrustChainSettings()
         val randomWalk = RandomWalk.Factory()
         // Initialize storage
@@ -69,7 +56,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             listOf(randomWalk)
         )
 
-        // We now initialize IPv8 with this new community
+        // Initialize IPv8 with this new community
         val trustChainConfiguration = IPv8Configuration(overlays=listOf(luuksTrustChainCommunity))
         activity?.let { IPv8Android.Factory(it.application).setConfiguration(trustChainConfiguration).setPrivateKey(getPrivateKey(requireContext())).init() }
 
@@ -106,7 +93,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             val trustChainCommunity = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()
             if (trustChainCommunity != null) {
                 while (true) {
-
+                    Thread.sleep(5000)
                     println("alert: getting peers, found ${Integer.toString(peers.size)}")
                     val peerlist :List<Peer> = trustChainCommunity.getPeers()
 
@@ -118,7 +105,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                             }
 
                         }
-
                         for (index in 0..peers.size - 1) {
                             if (!peerlist.contains(peers[index].peer)) {
                                 peers.removeAt(index)
@@ -126,24 +112,12 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                             }
                         }
                     })
-
-
-//                    for (peer in peers) {
-//                        lifecycleScope.launch {
-//                            println("crawling!!")
-//                            trustchain.crawlChain(peer.peer)
-//                        }
-//                    }
                     Thread.sleep(50)
                 }
-
-
-
             }
 
 
         }).start()
-        // wow new comment
 
         // Register the signer that will deal with the incoming benchmark proposals.
         registerBenchmarkSigner(trustchain)
@@ -152,14 +126,21 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         // In these listeners, the blocks already went through the validator.
         trustchain.addListener("test_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
-                println("we received a block from ${block.publicKey.toHex()}, amazing")
-                // If we receive a proposal of the correct type...
+                println("Received block from ${block.publicKey.toHex()}...")
 
-                println("${AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()} received a proposal from ${block.publicKey.toHex()}")
-                if (block.isProposal && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
-                    println("it is a proposal.")
-                    proposals.add(ProposalViewModel(block.publicKey.toString(), block.type, block))
-                    proposalAdapter.notifyItemInserted(proposals.size - 1)
+                val myPublicId = AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()
+                if (block.isProposal) {
+                    println("The block above is a Proposal...")
+                    if (block.publicKey.toHex() != myPublicId) {
+                        proposals.add(
+                            ProposalViewModel(
+                                block.publicKey.toString(),
+                                block.type,
+                                block
+                            )
+                        )
+                        proposalAdapter.notifyItemInserted(proposals.size - 1)
+                    }
                 }
             }
         })
@@ -178,9 +159,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         }
     }
 
-
-
-    // We also register a TransactionValidator. This one is simple and checks whether "test_block"s are valid.
+    // Register a TransactionValidator. Simply checks whether "test_block"s are valid.
     private fun registerValidator(trustchain : TrustChainCommunity) {
         trustchain.registerTransactionValidator("test_block", object : TransactionValidator {
             override fun validate(
@@ -205,10 +184,12 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         })
     }
 
-    // This function registers a BlockSigner. We will notify it of incoming valid blocks, and this method will make sure an agreement is generated for it.
+    // This function registers a BlockSigner. We will notify it of incoming valid blocks,
+    // and this method will make sure an agreement is generated for it.
     // Again, this will only register the signer for blocks of type test_block.
-    // Note that this signer will be called at all incoming proposals, so it will automatically reply. This will of course be necessary later, but for now it might be nice
-    // to reply to incoming proposals manually.
+    // Note that this signer will be called at all incoming proposals, so it will
+    // automatically reply. This will of course be necessary later, but for now it
+    // might be nice to reply to incoming proposals manually.
     private fun registerSigner(trustchain : TrustChainCommunity) {
         trustchain.registerBlockSigner("test_block", object : BlockSigner {
             override fun onSignatureRequest(block: TrustChainBlock) {
@@ -229,16 +210,13 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         })
     }
 
-
-
-
     // Create a proposal block, store it, and send it to all peers. It sends blocks of type "test_block"
     private fun createProposal(recipient : Peer) {
         // get reference to the trustchain community
         val trustchain = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()!!
 
         val transaction = mapOf("message" to "test message!")
-        println("creating proposal, sending to ${recipient.publicKey.keyToBin()}")
+        println("Sending Proposal to ${recipient.publicKey.keyToBin()}")
         trustchain.createProposalBlock("test_block", transaction, recipient.publicKey.keyToBin())
     }
 
