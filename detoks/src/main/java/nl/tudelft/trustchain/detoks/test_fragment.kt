@@ -166,7 +166,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     }
 
     private fun registerBenchmarkSigner() {
-        val benchmarkTextView = benchmarkCounterTextView
         trustchainInstance.registerBlockSigner("benchmark_block", object : BlockSigner {
             override fun onSignatureRequest(block: TrustChainBlock) {
                 trustchainInstance.createAgreementBlock(block, mapOf("message" to block.transaction["message"]))
@@ -255,9 +254,10 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     override fun runBenchmark(peer: Peer) {
         // we generate the unique identifier as UUID...
         val  benchmarkIdentifier: String = UUID.randomUUID().toString()
+        currentBenchmarkIdentifier = benchmarkIdentifier
         benchmarkStartTime = System.nanoTime()
         for (i in 0..999) {
-            val transaction = mapOf("message" to "benchmark$i-benchmarkIdentifier")
+            val transaction = mapOf("message" to "benchmark$i-$benchmarkIdentifier")
             trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
         }
     }
