@@ -121,6 +121,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             override fun onBlockReceived(block: TrustChainBlock) {
                 if (block.isAgreement && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
                     var counterTV : TextView = benchmarkCounterTextView
+                    var indexTV : TextView = benchmarkStatusTextView
                     var benchmarkIndex : Int = Integer.parseInt(block.transaction["message"].toString().drop(9).take(3))
                     println("benchmark: received $benchmarkIndex and index $benchmarkCounter")
                     benchmarkCounter++
@@ -132,7 +133,10 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                         var elapsed : Long = System.nanoTime() - benchmarkStartTime
                         activity?.runOnUiThread { counterTV.text = elapsed.toString() }
                     } else {
-                        activity?.runOnUiThread{counterTV.text = highestReceivedBenchmarkCounter.toString()}
+                        activity?.runOnUiThread{
+                            counterTV.text = highestReceivedBenchmarkCounter.toString()
+                            indexTV.text = benchmarkIndex.toString()
+                        }
 
                     }
 
