@@ -35,6 +35,8 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     var benchmarkStartTime : Long = 0
     var benchmarkEndTime : Long = 0
     var currentBenchmarkIdentifier : String = ""
+    var highestReceivedBenchmarkCounter : Int = 0
+    var benchmarkCounter : Int = 0
 
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -52,7 +54,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
-        val adapter = PeerAdapter(peers, this)
+        val adapter = PeerAdapter(peers, this, this)
 
         peerRecyclerView.adapter = adapter
 
@@ -117,7 +119,24 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         trustchainInstance.addListener("benchmark_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
-                println("received a benchmark block")
+                if (block.isAgreement && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
+                    var counterTV : TextView = benchmarkCounterTextView
+                    var benchmarkIndex : Int = Integer.parseInt(block.transaction["message"].toString().drop(9).take(3))
+                    println("benchmark: received $benchmarkIndex and index $benchmarkCounter")
+                    benchmarkCounter++
+                    if (benchmarkIndex > highestReceivedBenchmarkCounter) {
+                        highestReceivedBenchmarkCounter = benchmarkIndex
+                    }
+                    if (benchmarkCounter >= 999 && benchmarkIndex >= 999) {
+
+                        var elapsed : Long = System.nanoTime() - benchmarkStartTime
+                        activity?.runOnUiThread { counterTV.text = elapsed.toString() }
+                    } else {
+                        activity?.runOnUiThread{counterTV.text = highestReceivedBenchmarkCounter.toString()}
+
+                    }
+
+                }
 
             }
         })
@@ -136,10 +155,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                     return ValidationResult.Valid
                 } else if (block.transaction["message"].toString().take(12) == "benchmark999" && block.isAgreement && block.transaction["message"].toString().takeLast(36) == currentBenchmarkIdentifier) {
                     // In this case, we have received the last agreement of the benchmark and we can stop the timer.
-                    benchmarkEndTime = System.nanoTime()
-                    var elapsed : Long = benchmarkEndTime - benchmarkStartTime
-                    var counterTV : TextView = benchmarkCounterTextView
-                    counterTV.text = "Finished in $elapsed"
+
                     return ValidationResult.Valid
                 } else if (block.transaction["message"].toString().take(9) == "benchmark" && block.isAgreement) {
                     return ValidationResult.Valid
@@ -252,14 +268,21 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     // We first generate a unique identifier for this particular instance of the benchmark. We do
     // this to distinguish between the received agreements of different runs of the benchmark.
     override fun runBenchmark(peer: Peer) {
+        println("========================== Running benchmark!")
         // we generate the unique identifier as UUID...
         val  benchmarkIdentifier: String = UUID.randomUUID().toString()
         currentBenchmarkIdentifier = benchmarkIdentifier
         benchmarkStartTime = System.nanoTime()
-        for (i in 0..999) {
-            val transaction = mapOf("message" to "benchmark$i-$benchmarkIdentifier")
-            trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
-        }
+        benchmarkCounter = 0
+
+        Thread(Runnable {
+            for (i in 0..999) {
+                var index : String = i.toString().padStart(3, '0')
+                val transaction = mapOf("message" to "benchmark$index-$benchmarkIdentifier")
+                trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
+            }
+        }).start()
+
     }
 }
 
