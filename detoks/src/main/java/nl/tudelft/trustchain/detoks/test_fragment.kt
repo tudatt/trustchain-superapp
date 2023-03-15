@@ -2,27 +2,37 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.squareup.sqldelight.android.AndroidSqliteDriver
 import kotlinx.android.synthetic.main.test_fragment_layout.*
+import nl.tudelft.ipv8.Community
+import nl.tudelft.ipv8.IPv8Configuration
+import nl.tudelft.ipv8.OverlayConfiguration
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
 import nl.tudelft.ipv8.attestation.trustchain.*
+import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainStore
 import nl.tudelft.ipv8.attestation.trustchain.validation.TransactionValidator
 import nl.tudelft.ipv8.attestation.trustchain.validation.ValidationResult
 import nl.tudelft.ipv8.messaging.Deserializable
 import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.messaging.Serializable
+import nl.tudelft.ipv8.peerdiscovery.strategy.RandomWalk
+import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.hexToBytes
 import nl.tudelft.ipv8.util.toHex
 import nl.tudelft.trustchain.common.ui.BaseFragment
 import java.util.*
-import kotlin.collections.ArrayList
 
 private const val PREF_PRIVATE_KEY = "private_key"
 
@@ -43,6 +53,87 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
 
+//        val luukCommunity = OverlayConfiguration(
+//            Overlay.Factory(LuukCommunity::class.java),
+//            listOf(RandomWalk.Factory())
+//        )
+
+//        val configuration = IPv8Configuration(overlays=listOf(luukCommunity))
+
+//        System.out.println("Application returns " + Application())
+//        System.out.println("Context is " + context.toString())
+
+//        activity?.let { IPv8Android.Factory(it.application).setConfiguration(configuration).setPrivateKey(getPrivateKey(requireContext())).init() }
+
+        //Do the trustchain things
+        val settings = TrustChainSettings()
+        val randomWalk = RandomWalk.Factory()
+        // Initialize storage
+        val driver = AndroidSqliteDriver(Database.Schema, requireContext(), "trustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+
+        // Create the community
+        val luuksTrustChainCommunity = OverlayConfiguration(
+            TrustChainCommunity.Factory(settings, store),
+            listOf(randomWalk)
+        )
+
+        // We now initialize IPv8 with this new community
+        val trustChainConfiguration = IPv8Configuration(overlays=listOf(luuksTrustChainCommunity))
+        activity?.let { IPv8Android.Factory(it.application).setConfiguration(trustChainConfiguration).setPrivateKey(getPrivateKey(requireContext())).init() }
+
+
+        // DEFINE BEHAVIOR BOOTSTRAP SERVERS
+
+        // button to show the bootstrap servers
+        val button = view.findViewById<Button>(R.id.bootstrapButton)
+
+        button.setOnClickListener {
+            // select the popup layout file
+            val popupView = LayoutInflater.from(requireContext()).inflate(R.layout.popup_servers, null)
+
+            // open the popup window in the middle of the screen
+            val popupWindow = PopupWindow(popupView, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
+            popupWindow.showAtLocation(view, Gravity.CENTER, 0, 0)
+
+
+            val text = popupView.findViewById<TextView>(R.id.text_popup)
+
+           val com = getTrustChainCommunity()
+
+            val walkable = com.getWalkableAddresses()
+
+            var res_str = "BOOTSTRAP SERVERS : \n"
+
+            Community.DEFAULT_ADDRESSES.forEach {address ->
+                res_str += address.toString()
+                res_str += if (address in walkable) " UP\n"; else " DOWN\n"
+
+            }
+            res_str += "\n WALKABLE ADDRESSES :\n" + walkable.joinToString("\n")
+            res_str += "\n\nWAN: " + com.myEstimatedWan.toString() + "\n"
+            res_str += "`\nLAN: " + com.myEstimatedLan.toString() + "\n"
+            text.text = res_str
+            // showing the servers on the popup and if they're active or not.
+
+            // close popup window on closebutton click
+            val closeButton = popupView.findViewById<Button>(R.id.close_button)
+            closeButton.setOnClickListener {
+                popupWindow.dismiss()
+            }
+        }
+
+        val benchmarkTextView = benchmarkStatusTextView
+        benchmarkTextView.text = "Currently not running a benchmark."
+
+        val benchmarkCounterTextView = benchmarkCounterTextView
+        benchmarkCounterTextView.text = ""
+
+
+        //val trustchain = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()!!
+
+        // Call this method to register the validator.
+        //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
 
