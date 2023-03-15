@@ -2,10 +2,20 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import android.os.Bundle
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
+
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.PopupWindow
+import android.widget.TextView
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.android.synthetic.main.test_fragment_layout.*
+import nl.tudelft.ipv8.Community
+import nl.tudelft.ipv8.IPv8Configuration
+import nl.tudelft.ipv8.OverlayConfiguration
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
@@ -19,6 +29,7 @@ import nl.tudelft.ipv8.messaging.Serializable
 import nl.tudelft.ipv8.util.hexToBytes
 import nl.tudelft.ipv8.util.toHex
 import nl.tudelft.trustchain.common.ui.BaseFragment
+import java.util.*
 
 private const val PREF_PRIVATE_KEY = "private_key"
 
@@ -26,12 +37,18 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
+
     lateinit var trustchainInstance: DetoksTrustChainCommunity
+
+    var benchmarkStartTime : Long = 0
+    var benchmarkEndTime : Long = 0
+    var currentBenchmarkIdentifier : String = ""
+    var highestReceivedBenchmarkCounter : Int = 0
+    var benchmarkCounter : Int = 0
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
-
 
 //        val luukCommunity = OverlayConfiguration(
 //            Overlay.Factory(LuukCommunity::class.java),
@@ -46,39 +63,88 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 //        activity?.let { IPv8Android.Factory(it.application).setConfiguration(configuration).setPrivateKey(getPrivateKey(requireContext())).init() }
 
         //Do the trustchain things
-//        val settings = TrustChainSettings()
-//        val randomWalk = RandomWalk.Factory()
-//        // Initialize storage
-//        val driver = AndroidSqliteDriver(Database.Schema, requireContext(), "trustchain.db")
-//        val store = TrustChainSQLiteStore(Database(driver))
-//
-//        // Create the community
-//        val luuksTrustChainCommunity = OverlayConfiguration(
-//            TrustChainCommunity.Factory(settings, store),
-//            listOf(randomWalk)
-//        )
-//
-//        // We now initialize IPv8 with this new community
-//        val trustChainConfiguration = IPv8Configuration(overlays=listOf(luuksTrustChainCommunity))
-//        activity?.let { IPv8Android.Factory(it.application).setConfiguration(trustChainConfiguration).setPrivateKey(getPrivateKey(requireContext())).init() }
-//
-//        val benchmarkTextView = benchmarkStatusTextView
-//        benchmarkTextView.text = "Currently not running a benchmark."
-//
-//        val benchmarkCounterTextView = benchmarkCounterTextView
-//        benchmarkCounterTextView.text = ""
+
+        val settings = TrustChainSettings()
+        val randomWalk = RandomWalk.Factory()
+        // Initialize storage
+        val driver = AndroidSqliteDriver(Database.Schema, requireContext(), "trustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+
+        // Create the community
+        val luuksTrustChainCommunity = OverlayConfiguration(
+            TrustChainCommunity.Factory(settings, store),
+            listOf(randomWalk)
+        )
+
+        // We now initialize IPv8 with this new community
+        val trustChainConfiguration = IPv8Configuration(overlays=listOf(luuksTrustChainCommunity))
+        activity?.let { IPv8Android.Factory(it.application).setConfiguration(trustChainConfiguration).setPrivateKey(getPrivateKey(requireContext())).init() }
+
+
+        // DEFINE BEHAVIOR BOOTSTRAP SERVERS
+
+        // button to show the bootstrap servers
+        val button = view.findViewById<Button>(R.id.bootstrapButton)
+
+        button.setOnClickListener {
+            // select the popup layout file
+            val popupView = LayoutInflater.from(requireContext()).inflate(R.layout.popup_servers, null)
+
+            // open the popup window in the middle of the screen
+            val popupWindow = PopupWindow(popupView, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
+            popupWindow.showAtLocation(view, Gravity.CENTER, 0, 0)
+
+
+            val text = popupView.findViewById<TextView>(R.id.text_popup)
+
+           val com = getTrustChainCommunity()
+
+            val walkable = com.getWalkableAddresses()
+
+            var res_str = "BOOTSTRAP SERVERS : \n"
+
+            Community.DEFAULT_ADDRESSES.forEach {address ->
+                res_str += address.toString()
+                res_str += if (address in walkable) " UP\n"; else " DOWN\n"
+
+            }
+            res_str += "\n WALKABLE ADDRESSES :\n" + walkable.joinToString("\n")
+            res_str += "\n\nWAN: " + com.myEstimatedWan.toString() + "\n"
+            res_str += "`\nLAN: " + com.myEstimatedLan.toString() + "\n"
+            text.text = res_str
+            // showing the servers on the popup and if they're active or not.
+
+            // close popup window on closebutton click
+            val closeButton = popupView.findViewById<Button>(R.id.close_button)
+            closeButton.setOnClickListener {
+                popupWindow.dismiss()
+            }
+        }
+
+        val benchmarkTextView = benchmarkStatusTextView
+        benchmarkTextView.text = "Currently not running a benchmark."
+
+        val benchmarkCounterTextView = benchmarkCounterTextView
+        benchmarkCounterTextView.text = ""
+
+
+        //val trustchain = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()!!
+
+
+        // Call this method to register the validator.
+        //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
 
         // Call this method to register the validator.
-        //registerValidator(trustchain)
+        registerValidator()
 
         // Register the BlockSigner
         //registerSigner(trustchain)
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
-        val adapter = PeerAdapter(peers, this)
+        val adapter = PeerAdapter(peers, this, this)
 
         peerRecyclerView.adapter = adapter
 
@@ -86,8 +152,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         proposalRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         val proposalAdapter = ProposalAdapter(proposals, this)
         proposalRecyclerView.adapter = proposalAdapter
-
-//        val helper: TrustChainHelper = TrustChainHelper(trustchain)
 
 
         Thread {
@@ -116,13 +180,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                         }
                     }
 
-
-//                    for (peer in peers) {
-//                        lifecycleScope.launch {
-//                            println("crawling!!")
-//                            trustchain.crawlChain(peer.peer)
-//                        }
-//                    }
                     Thread.sleep(50)
                 }
 
@@ -140,21 +197,41 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         // In these listeners, the blocks already went through the validator.
         trustchainInstance.addListener("test_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
-                println("we received a block from ${block.publicKey.toHex()}, amazing")
                 // If we receive a proposal of the correct type...
 
                 println("${AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()} received a proposal from ${block.publicKey.toHex()}")
                 if (block.isProposal && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
-                    println("it is a proposal.")
                     proposals.add(ProposalViewModel(block.publicKey.toString(), block.type, block))
-                    proposalAdapter.notifyItemInserted(proposals.size - 1)
+                    activity?.runOnUiThread{proposalAdapter.notifyItemInserted(proposals.size - 1)}
+
                 }
             }
         })
 
         trustchainInstance.addListener("benchmark_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
-                println("received a benchmark block")
+                if (block.isAgreement && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
+                    var counterTV : TextView = benchmarkCounterTextView
+                    var indexTV : TextView = benchmarkStatusTextView
+                    var benchmarkIndex : Int = Integer.parseInt(block.transaction["message"].toString().drop(9).take(3))
+                    println("benchmark: received $benchmarkIndex and index $benchmarkCounter")
+                    benchmarkCounter++
+                    if (benchmarkIndex > highestReceivedBenchmarkCounter) {
+                        highestReceivedBenchmarkCounter = benchmarkIndex
+                    }
+                    if (benchmarkCounter >= 999 && benchmarkIndex >= 999) {
+
+                        var elapsed : Long = System.nanoTime() - benchmarkStartTime
+                        activity?.runOnUiThread { counterTV.text = elapsed.toString() }
+                    } else {
+                        activity?.runOnUiThread{
+                            counterTV.text = highestReceivedBenchmarkCounter.toString()
+                            indexTV.text = benchmarkIndex.toString()
+                        }
+
+                    }
+
+                }
 
             }
         })
@@ -171,9 +248,11 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                 if (block.transaction["message"] == "test message!" && block.isProposal) {
                     println("received a valid proposal from ${block.publicKey.toHex()}")
                     return ValidationResult.Valid
-                } else if (block.transaction["message"] == "benchmark" && block.isProposal) {
+                } else if (block.transaction["message"].toString().take(12) == "benchmark999" && block.isAgreement && block.transaction["message"].toString().takeLast(36) == currentBenchmarkIdentifier) {
+                    // In this case, we have received the last agreement of the benchmark and we can stop the timer.
+
                     return ValidationResult.Valid
-                } else if (block.transaction["message"] == "benchmark" && block.isAgreement) {
+                } else if (block.transaction["message"].toString().take(9) == "benchmark" && block.isAgreement) {
                     return ValidationResult.Valid
                 } else if (block.isAgreement) {
                     return ValidationResult.Valid
@@ -198,13 +277,9 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     }
 
     private fun registerBenchmarkSigner() {
-        val benchmarkTextView = benchmarkCounterTextView
-        var counter = 0
         trustchainInstance.registerBlockSigner("benchmark_block", object : BlockSigner {
             override fun onSignatureRequest(block: TrustChainBlock) {
                 trustchainInstance.createAgreementBlock(block, mapOf("message" to block.transaction["message"]))
-                counter++
-                benchmarkTextView.text = "Agreement $counter"
             }
         })
     }
@@ -285,10 +360,25 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
 
     // Run the benchmark, do 1000 transactions with a peer.
+    // We first generate a unique identifier for this particular instance of the benchmark. We do
+    // this to distinguish between the received agreements of different runs of the benchmark.
     override fun runBenchmark(peer: Peer) {
-        for (i in 0..999) {
-            createProposal(peer, "benchmark")
-        }
+
+        println("========================== Running benchmark!")
+        // we generate the unique identifier as UUID...
+        val  benchmarkIdentifier: String = UUID.randomUUID().toString()
+        currentBenchmarkIdentifier = benchmarkIdentifier
+        benchmarkStartTime = System.nanoTime()
+        benchmarkCounter = 0
+
+        Thread(Runnable {
+            for (i in 0..999) {
+                var index : String = i.toString().padStart(3, '0')
+                val transaction = mapOf("message" to "benchmark$index-$benchmarkIdentifier")
+                trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
+            }
+        }).start()
+
     }
 }
 
