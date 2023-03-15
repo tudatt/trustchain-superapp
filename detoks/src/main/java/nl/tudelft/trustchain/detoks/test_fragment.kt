@@ -5,13 +5,13 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
-
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.squareup.sqldelight.android.AndroidSqliteDriver
 import kotlinx.android.synthetic.main.test_fragment_layout.*
 import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.IPv8Configuration
@@ -20,12 +20,15 @@ import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
 import nl.tudelft.ipv8.attestation.trustchain.*
+import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainStore
 import nl.tudelft.ipv8.attestation.trustchain.validation.TransactionValidator
 import nl.tudelft.ipv8.attestation.trustchain.validation.ValidationResult
 import nl.tudelft.ipv8.messaging.Deserializable
 import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.messaging.Serializable
+import nl.tudelft.ipv8.peerdiscovery.strategy.RandomWalk
+import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.hexToBytes
 import nl.tudelft.ipv8.util.toHex
 import nl.tudelft.trustchain.common.ui.BaseFragment
@@ -45,6 +48,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     var highestReceivedBenchmarkCounter : Int = 0
     var benchmarkCounter : Int = 0
 
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
@@ -62,16 +66,15 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 //        activity?.let { IPv8Android.Factory(it.application).setConfiguration(configuration).setPrivateKey(getPrivateKey(requireContext())).init() }
 
         //Do the trustchain things
-
         val settings = TrustChainSettings()
         val randomWalk = RandomWalk.Factory()
         // Initialize storage
-        val driver = AndroidSqliteDriver(Database.Schema, requireContext(), "trustchain.db")
+        val driver = AndroidSqliteDriver(Database.Schema, requireContext(), "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
 
         // Create the community
         val luuksTrustChainCommunity = OverlayConfiguration(
-            TrustChainCommunity.Factory(settings, store),
+            DetoksTrustChainCommunity.Factory(settings, store),
             listOf(randomWalk)
         )
 
@@ -96,7 +99,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
             val text = popupView.findViewById<TextView>(R.id.text_popup)
 
-           val com = getTrustChainCommunity()
+            val com = getTrustChainCommunity()
 
             val walkable = com.getWalkableAddresses()
 
@@ -127,7 +130,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         benchmarkCounterTextView.text = ""
 
 
-        //IPv8Android.getInstance().getOverlay<DetoksTrustChainCommunity>()
+        //val trustchain = IPv8Android.getInstance().getOverlay<DetoksTrustChainCommunity>()!!
 
         // Call this method to register the validator.
         //registerValidator(trustchain)
@@ -150,7 +153,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         proposalRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         val proposalAdapter = ProposalAdapter(proposals, this)
         proposalRecyclerView.adapter = proposalAdapter
-
 
         Thread {
 
@@ -361,7 +363,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     // We first generate a unique identifier for this particular instance of the benchmark. We do
     // this to distinguish between the received agreements of different runs of the benchmark.
     override fun runBenchmark(peer: Peer) {
-
         println("========================== Running benchmark!")
         // we generate the unique identifier as UUID...
         val  benchmarkIdentifier: String = UUID.randomUUID().toString()
