@@ -40,7 +40,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
-    lateinit var trustchainInstance: TrustChainCommunity
+    lateinit var trustchainInstance: DetoksTrustChainCommunity
 
     var benchmarkStartTime : Long = 0
     var benchmarkEndTime : Long = 0
@@ -130,7 +130,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         benchmarkCounterTextView.text = ""
 
 
-        //val trustchain = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()!!
+        //IPv8Android.getInstance().getOverlay<DetoksTrustChainCommunity>()
 
         // Call this method to register the validator.
         //registerValidator(trustchain)
@@ -156,7 +156,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         Thread {
 
-            val trustChainCommunity = IPv8Android.getInstance().getOverlay<TrustChainCommunity>()
+            val trustChainCommunity = IPv8Android.getInstance().getOverlay<DetoksTrustChainCommunity>()
             if (trustChainCommunity != null) {
                 while (true) {
 
