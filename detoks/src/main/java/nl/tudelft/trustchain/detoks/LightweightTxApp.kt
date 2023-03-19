@@ -1,13 +1,11 @@
 package nl.tudelft.trustchain.detoks
 
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
-import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver.Companion.IN_MEMORY
 import com.squareup.sqldelight.db.SqlDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import mu.KotlinLogging
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainCommunity
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainSettings
@@ -43,7 +41,7 @@ class DemoTransactionApp {
 
     private fun createTrustChainCommunity(): OverlayConfiguration<TrustChainCommunity> {
         val settings = TrustChainSettings()
-        val driver: SqlDriver = JdbcSqliteDriver(IN_MEMORY)
+        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         Database.Schema.create(driver)
         val database = Database(driver)
         val store = TrustChainSQLiteStore(database)
@@ -70,7 +68,7 @@ class DemoTransactionApp {
 
         val config = IPv8Configuration(overlays = listOf(
             createDiscoveryCommunity(),
-            //createTrustChainCommunity(),
+            createTrustChainCommunity(),
             createDemoCommunity()
         ), walkerInterval = 1.0)
 
