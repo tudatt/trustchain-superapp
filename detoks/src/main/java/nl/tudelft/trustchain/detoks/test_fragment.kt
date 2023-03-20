@@ -2,6 +2,7 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Debug
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -53,6 +54,8 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
 
+        Debug.startMethodTracing("onViewCreated", 128 * 1024 * 1024)
+
 //        val luukCommunity = OverlayConfiguration(
 //            Overlay.Factory(LuukCommunity::class.java),
 //            listOf(RandomWalk.Factory())
@@ -87,6 +90,8 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         // button to show the bootstrap servers
         val button = view.findViewById<Button>(R.id.bootstrapButton)
+
+        Debug.stopMethodTracing()
 
         button.setOnClickListener {
             // select the popup layout file
