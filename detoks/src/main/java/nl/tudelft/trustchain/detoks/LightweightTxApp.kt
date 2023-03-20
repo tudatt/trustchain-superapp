@@ -1,5 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
+import android.media.session.MediaSession.Token
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import kotlinx.coroutines.CoroutineScope
@@ -9,6 +10,7 @@ import kotlinx.coroutines.launch
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainCommunity
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainSettings
+import nl.tudelft.ipv8.attestation.trustchain.payload.CrawlRequestPayload
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.JavaCryptoProvider
 import nl.tudelft.ipv8.messaging.EndpointAggregator
@@ -52,10 +54,10 @@ class DemoTransactionApp {
         )
     }
 
-    private fun createDemoCommunity(): OverlayConfiguration<LuukCommunity> {
+    private fun createDemoCommunity(): OverlayConfiguration<DeToksCommunity> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            Overlay.Factory(LuukCommunity::class.java),
+            DeToksCommunity.Factory(),
             listOf(randomWalk)
         )
     }
@@ -67,8 +69,8 @@ class DemoTransactionApp {
         val endpoint = EndpointAggregator(udpEndpoint, null)
 
         val config = IPv8Configuration(overlays = listOf(
-            createDiscoveryCommunity(),
-            createTrustChainCommunity(),
+            // createDiscoveryCommunity(),
+            // createTrustChainCommunity(),
             createDemoCommunity()
         ), walkerInterval = 1.0)
 
@@ -77,11 +79,19 @@ class DemoTransactionApp {
 
         scope.launch {
             while (true) {
-                for ((_, overlay) in ipv8.overlays) {
+                /*for ((_, overlay) in ipv8.overlays) {
                     printPeersInfo(overlay)
-                }
+                }*/
+                val overlay = ipv8.overlays.values.toList()[0]
+                printPeersInfo(overlay)
                 println("===")
                 delay(5000)
+                val community = ipv8.getOverlay<DeToksCommunity>()!!
+                val peers = community.getPeers()
+                for (peer in peers) {
+                    val packet = community.serializePacket(21, TorrentMessage("HelloWorld"))
+                    community.sendRandom(peer.address, packet)
+                }
             }
         }
 

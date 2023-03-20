@@ -1,5 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
+import android.content.Context
 import nl.tudelft.ipv8.attestation.trustchain.*
 
 import kotlinx.coroutines.*
@@ -14,11 +15,34 @@ import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainStore
 import nl.tudelft.ipv8.attestation.trustchain.validation.ValidationErrors
 import nl.tudelft.ipv8.keyvault.defaultCryptoProvider
 import nl.tudelft.ipv8.messaging.Address
+import nl.tudelft.ipv8.messaging.Serializable
 import nl.tudelft.ipv8.util.toHex
 import kotlin.coroutines.Continuation
 import kotlin.math.max
 
 private val logger = KotlinLogging.logger {}
+
+class TorrentMessage(val magnet: String) : Serializable {
+
+    override fun serialize(): ByteArray {
+        return magnet.toByteArray()
+    }
+}
+class DeToksCommunity(): Community() {
+    override val serviceId = "98758cf7ca9238ccc33329384902d2938f348723"
+
+    fun sendRandom(address: Address, packet: ByteArray) {
+        send(address, packet)
+        println("Sending stuff...")
+    }
+
+    class Factory() : Overlay.Factory<DeToksCommunity>(DeToksCommunity::class.java) {
+        override fun create(): DeToksCommunity {
+            return DeToksCommunity()
+        }
+    }
+}
+
 
 /**
  * The community implementing TrustChain, a scalable, tamper-proof, distributed ledger. The
