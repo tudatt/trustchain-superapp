@@ -5,10 +5,24 @@ import android.util.Log
 import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
+import nl.tudelft.ipv8.messaging.Address
 import nl.tudelft.ipv8.messaging.Packet
 
+open class DeToksCommunityLightWeight(): Community() {
+    override val serviceId = "98758cf7ca9238ccc33329384902d2938f348723"
 
-class DeToksCommunity(private val context: Context) : Community() {
+    fun sendRandom(address: Address, packet: ByteArray) {
+        send(address, packet)
+        println("Sending stuff...")
+    }
+
+    class Factory() : Overlay.Factory<DeToksCommunityLightWeight>(DeToksCommunityLightWeight::class.java) {
+        override fun create(): DeToksCommunityLightWeight {
+            return DeToksCommunityLightWeight()
+        }
+    }
+}
+class DeToksCommunity(private val context: Context) : DeToksCommunityLightWeight() {
 
     private val walletManager = WalletManager(context)
     private val visitedPeers  = mutableListOf<Peer>()

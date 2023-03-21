@@ -2,6 +2,7 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.SharedPreferences
 import android.content.Context
+import java.io.File
 
 class WalletManager(private val context: Context) {
     private val mWalletPrefs: SharedPreferences =
@@ -20,6 +21,13 @@ class WalletManager(private val context: Context) {
 
     companion object {
         private const val WALLET_PREFS_NAME = "WalletPrefs"
+        private lateinit var instance: WalletManager
+        fun getInstance(context: Context): WalletManager {
+            if (!::instance.isInitialized) {
+                instance = WalletManager(context)
+            }
+            return instance
+        }
     }
 }
 
