@@ -28,17 +28,11 @@ class TorrentMessage(val magnet: String) : Serializable {
         return magnet.toByteArray()
     }
 }
-class DeToksCommunity(): Community() {
-    override val serviceId = "98758cf7ca9238ccc33329384902d2938f348723"
+class LightweightTxCommunity : TransactionEngineImpl("98758cf7ca9238ccc33329384902d2938f348723") {
 
-    fun sendRandom(address: Address, packet: ByteArray) {
-        send(address, packet)
-        println("Sending stuff...")
-    }
-
-    class Factory() : Overlay.Factory<DeToksCommunity>(DeToksCommunity::class.java) {
-        override fun create(): DeToksCommunity {
-            return DeToksCommunity()
+    class Factory() : Overlay.Factory<LightweightTxCommunity>(LightweightTxCommunity::class.java) {
+        override fun create(): LightweightTxCommunity {
+            return LightweightTxCommunity()
         }
     }
 }

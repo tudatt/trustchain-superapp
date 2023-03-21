@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.tudelft.ipv8.*
+import nl.tudelft.ipv8.attestation.trustchain.ProposalBlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainCommunity
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainSettings
 import nl.tudelft.ipv8.attestation.trustchain.payload.CrawlRequestPayload
@@ -41,23 +42,10 @@ class DemoTransactionApp {
         )
     }
 
-    private fun createTrustChainCommunity(): OverlayConfiguration<TrustChainCommunity> {
-        val settings = TrustChainSettings()
-        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        Database.Schema.create(driver)
-        val database = Database(driver)
-        val store = TrustChainSQLiteStore(database)
+    private fun createDemoCommunity(): OverlayConfiguration<LightweightTxCommunity> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            TrustChainCommunity.Factory(settings, store),
-            listOf(randomWalk)
-        )
-    }
-
-    private fun createDemoCommunity(): OverlayConfiguration<DeToksCommunity> {
-        val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
-        return OverlayConfiguration(
-            DeToksCommunity.Factory(),
+            LightweightTxCommunity.Factory(),
             listOf(randomWalk)
         )
     }
@@ -74,24 +62,24 @@ class DemoTransactionApp {
             createDemoCommunity()
         ), walkerInterval = 1.0)
 
+        // storage
+        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        Database.Schema.create(driver)
+        val store = TrustChainSQLiteStore(Database(driver))
+
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
         scope.launch {
             while (true) {
-                /*for ((_, overlay) in ipv8.overlays) {
-                    printPeersInfo(overlay)
-                }*/
                 val overlay = ipv8.overlays.values.toList()[0]
                 printPeersInfo(overlay)
                 println("===")
                 delay(5000)
-                val community = ipv8.getOverlay<DeToksCommunity>()!!
-                val peers = community.getPeers()
-                for (peer in peers) {
-                    val packet = community.serializePacket(21, TorrentMessage("HelloWorld"))
-                    community.sendRandom(peer.address, packet)
-                }
+                val community = ipv8.getOverlay<LightweightTxCommunity>()!!
+
+                val blockBuilder = ProposalBlockBuilder(myPeer, store, "type", mapOf<String, Any>(), myKey.pub().keyToBin())
+                community.sendTransaction(blockBuilder)
             }
         }
 
