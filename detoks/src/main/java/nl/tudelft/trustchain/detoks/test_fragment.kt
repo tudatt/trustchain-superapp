@@ -13,10 +13,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import kotlinx.android.synthetic.main.test_fragment_layout.*
-import nl.tudelft.ipv8.Community
-import nl.tudelft.ipv8.IPv8Configuration
-import nl.tudelft.ipv8.OverlayConfiguration
-import nl.tudelft.ipv8.Peer
+import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
 import nl.tudelft.ipv8.attestation.trustchain.*
@@ -36,11 +33,13 @@ import java.util.*
 
 private const val PREF_PRIVATE_KEY = "private_key"
 
-class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransactionOnClick, confirmProposalOnClick, benchmark1000 {
+class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransactionOnClick, confirmProposalOnClick, benchmark1000, benchmarkBasicToken1000 {
 
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
     lateinit var trustchainInstance: DetoksTrustChainCommunity
+    lateinit var deToksCommunity: DeToksCommunity
+
 
     var benchmarkStartTime : Long = 0
     var benchmarkEndTime : Long = 0
@@ -53,17 +52,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         super.onViewCreated(view, savedInstanceState)
         val privateKey = getPrivateKey(requireContext())
 
-//        val luukCommunity = OverlayConfiguration(
-//            Overlay.Factory(LuukCommunity::class.java),
-//            listOf(RandomWalk.Factory())
-//        )
-
-//        val configuration = IPv8Configuration(overlays=listOf(luukCommunity))
-
-//        System.out.println("Application returns " + Application())
-//        System.out.println("Context is " + context.toString())
-
-//        activity?.let { IPv8Android.Factory(it.application).setConfiguration(configuration).setPrivateKey(getPrivateKey(requireContext())).init() }
 
         //Do the trustchain things
         val settings = TrustChainSettings()
@@ -82,6 +70,10 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         val trustChainConfiguration = IPv8Configuration(overlays=listOf(luuksTrustChainCommunity))
         activity?.let { IPv8Android.Factory(it.application).setConfiguration(trustChainConfiguration).setPrivateKey(getPrivateKey(requireContext())).init() }
 
+
+
+        // get the deToksCommunity for use in the benchmark
+        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // DEFINE BEHAVIOR BOOTSTRAP SERVERS
 
@@ -136,6 +128,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
+        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // Call this method to register the validator.
         registerValidator()
@@ -145,7 +138,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
-        val adapter = PeerAdapter(peers, this, this)
+        val adapter = PeerAdapter(peers, this, this, this)
 
         peerRecyclerView.adapter = adapter
 
@@ -348,13 +341,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                 adapter.notifyDataSetChanged()
             }
         }
-
-//        for (index in 0 .. proposals.size - 1) {
-//            if (proposals[index].block.equals(block)) {
-//                proposals.removeAt(index)
-//                adapter.notifyItemRemoved(index)
-//            }
-//        }
         println("alert: Agreement should have been sent!")
     }
 
@@ -379,6 +365,21 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         }).start()
 
     }
+
+    // In this function we will send 1000 transactions to a peer using the basic token implemented by another group.
+    // The goal of this transaction for now is to just send 1000 transactions. We measure on the receiving phone as well.
+    override fun runBasicTokenBenchmark(peer: Peer) {
+    }
+
+//    fun registerBasicTokenBenchmarkListener() {
+//        deToksCommunity.addListener("benchmark", object : BlockListener {
+//            override fun onBlockReceived(block: TrustChainBlock) {
+//                var counterTV : TextView = benchmarkCounterTextView
+//                var indexTV : TextView = benchmarkStatusTextView
+//            }
+//
+//        })
+//    }
 }
 
 interface singleTransactionOnClick {
@@ -391,4 +392,8 @@ interface confirmProposalOnClick {
 
 interface benchmark1000 {
     fun runBenchmark(peer: Peer)
+}
+
+interface benchmarkBasicToken1000 {
+    fun runBasicTokenBenchmark(peer: Peer)
 }

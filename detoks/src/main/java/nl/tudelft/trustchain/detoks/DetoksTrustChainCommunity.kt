@@ -18,7 +18,7 @@ import nl.tudelft.ipv8.util.toHex
 import kotlin.coroutines.Continuation
 import kotlin.math.max
 
-private val logger = KotlinLogging.logger {}
+val logger = KotlinLogging.logger {}
 
 /**
  * The community implementing TrustChain, a scalable, tamper-proof, distributed ledger. The
@@ -67,7 +67,7 @@ open class DetoksTrustChainCommunity(
     }
 
     /**
-     * Removes a previously registered block listener.
+     * Removes a previously registered block listener
      *
      * @param listener The listener to be removed.
      * @param blockType The block type to which the listener has been registered.
