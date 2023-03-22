@@ -8,9 +8,11 @@ import android.os.Bundle
 import android.os.IBinder
 import nl.tudelft.trustchain.common.BaseActivity
 
+
 class DeToksActivity : BaseActivity() {
     override val navigationGraph = R.navigation.nav_graph_detoks
     var gossipService: GossiperService? = null
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,4 +35,6 @@ class DeToksActivity : BaseActivity() {
             gossipService = null
         }
     }
+
+
 }

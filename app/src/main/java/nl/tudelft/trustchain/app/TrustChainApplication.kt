@@ -62,7 +62,11 @@ import nl.tudelft.trustchain.common.bitcoin.WalletService
 import nl.tudelft.trustchain.common.eurotoken.GatewayStore
 import nl.tudelft.trustchain.common.eurotoken.TransactionRepository
 import nl.tudelft.trustchain.currencyii.CoinCommunity
+<<<<<<< HEAD
+import nl.tudelft.trustchain.detoks.DetoksTrustChainCommunity
+=======
 import nl.tudelft.trustchain.detoks.DeToksCommunity
+>>>>>>> f5dd56d76830bff0626cec1f452c623cdbc8c2d0
 import nl.tudelft.trustchain.eurotoken.community.EuroTokenCommunity
 import nl.tudelft.trustchain.eurotoken.db.TrustStore
 import nl.tudelft.trustchain.gossipML.RecommenderCommunity
@@ -104,6 +108,7 @@ class TrustChainApplication : Application() {
             overlays = listOf(
                 createDiscoveryCommunity(),
                 createTrustChainCommunity(),
+                createDetoksTrustChainCommunity(),
                 createPeerChatCommunity(),
                 createEuroTokenCommunity(),
                 createTFTPCommunity(),
@@ -313,6 +318,16 @@ class TrustChainApplication : Application() {
         val randomWalk = RandomWalk.Factory()
         return OverlayConfiguration(
             TrustChainCommunity.Factory(settings, store),
+            listOf(randomWalk)
+        )
+    }
+    private fun createDetoksTrustChainCommunity(): OverlayConfiguration<DetoksTrustChainCommunity> {
+        val settings = TrustChainSettings()
+        val driver = AndroidSqliteDriver(Database.Schema, this, "detokschain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+        val randomWalk = RandomWalk.Factory()
+        return OverlayConfiguration(
+            DetoksTrustChainCommunity.Factory(settings, store),
             listOf(randomWalk)
         )
     }
