@@ -17,7 +17,6 @@ import java.util.*
 
 
 interface TransactionEngine {
-
     fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer? = null)
 }
 
@@ -34,8 +33,8 @@ open class TransactionEngineImpl (
     }
 
     init {
-        messageHandlers[msgidfixer(MessageId.HALF_BLOCK)] = ::onHalfBlockPacket
-        messageHandlers[msgidfixer(MessageId.HALF_BLOCK_BROADCAST)] = ::onHalfBlockBroadcastPacket
+        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK)] = ::onHalfBlockPacket
+        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST)] = ::onHalfBlockBroadcastPacket
     }
 
     override fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?) {
@@ -102,7 +101,7 @@ open class TransactionEngineImpl (
         }
     }
 
-    fun msgidfixer(msgid: Int): Int{
+    private fun msgIdFixer(msgid: Int): Int{
         @Suppress("DEPRECATION")
         return msgid.toChar().toByte().toInt()
     }

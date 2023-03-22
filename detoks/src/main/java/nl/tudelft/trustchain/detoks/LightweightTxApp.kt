@@ -32,17 +32,7 @@ class DemoTransactionApp {
         startIpv8()
     }
 
-    private fun createDiscoveryCommunity(): OverlayConfiguration<DiscoveryCommunity> {
-        val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
-        val randomChurn = RandomChurn.Factory()
-        val periodicSimilarity = PeriodicSimilarity.Factory()
-        return OverlayConfiguration(
-            DiscoveryCommunity.Factory(),
-            listOf(randomWalk, randomChurn, periodicSimilarity)
-        )
-    }
-
-    private fun createDemoCommunity(): OverlayConfiguration<LightweightTxCommunity> {
+    private fun createDeToksCommunity(): OverlayConfiguration<LightweightTxCommunity> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
             LightweightTxCommunity.Factory(),
@@ -57,9 +47,7 @@ class DemoTransactionApp {
         val endpoint = EndpointAggregator(udpEndpoint, null)
 
         val config = IPv8Configuration(overlays = listOf(
-            // createDiscoveryCommunity(),
-            // createTrustChainCommunity(),
-            createDemoCommunity()
+            createDeToksCommunity()
         ), walkerInterval = 1.0)
 
         // storage
