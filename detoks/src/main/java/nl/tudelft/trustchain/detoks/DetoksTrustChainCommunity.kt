@@ -22,16 +22,6 @@ import kotlin.math.max
 
 private val logger = KotlinLogging.logger {}
 
-class LightweightTxCommunity : TransactionEngineImpl("98758cf7ca9238ccc33329384902d2938f348723") {
-
-    class Factory() : Overlay.Factory<LightweightTxCommunity>(LightweightTxCommunity::class.java) {
-        override fun create(): LightweightTxCommunity {
-            return LightweightTxCommunity()
-        }
-    }
-}
-
-
 /**
  * The community implementing TrustChain, a scalable, tamper-proof, distributed ledger. The
  * community handles sending blocks, broadcasting, and crawling chains of other peers.
