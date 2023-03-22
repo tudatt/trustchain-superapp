@@ -12,6 +12,7 @@ class DeToksActivity : BaseActivity() {
     override val navigationGraph = R.navigation.nav_graph_detoks
     var gossipService: GossiperService? = null
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val actionBar = supportActionBar
