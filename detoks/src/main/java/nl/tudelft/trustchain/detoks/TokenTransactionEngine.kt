@@ -13,6 +13,7 @@ import nl.tudelft.ipv8.messaging.Address
 import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.messaging.Serializable
 import nl.tudelft.ipv8.util.random
+import java.util.*
 
 
 interface TransactionEngine {
@@ -33,8 +34,8 @@ open class TransactionEngineImpl (
     }
 
     init {
-        messageHandlers[MessageId.HALF_BLOCK] = ::onHalfBlockPacket
-        messageHandlers[MessageId.HALF_BLOCK_BROADCAST] = ::onHalfBlockBroadcastPacket
+        messageHandlers[msgidfixer(MessageId.HALF_BLOCK)] = ::onHalfBlockPacket
+        messageHandlers[msgidfixer(MessageId.HALF_BLOCK_BROADCAST)] = ::onHalfBlockBroadcastPacket
     }
 
     override fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?) {
@@ -71,6 +72,40 @@ open class TransactionEngineImpl (
         println("half block packet received from broadcast from: " + packet.source.toString())
     }
 
+    override fun onPacket(packet: Packet) {
+        val sourceAddress = packet.source
+        val data = packet.data
+
+        val probablePeer = network.getVerifiedByAddress(sourceAddress)
+        if (probablePeer != null) {
+            probablePeer.lastResponse = Date()
+        }
+
+        val packetPrefix = data.copyOfRange(0, prefix.size)
+        if (!packetPrefix.contentEquals(prefix)) {
+            // logger.debug("prefix not matching")
+            return
+        }
+
+        val msgId = data[prefix.size].toUByte().toInt()
+
+        val handler = messageHandlers[msgId]
+
+        if (handler != null) {
+            try {
+                handler(packet)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        } else {
+            println("Received unknown message $msgId from $sourceAddress")
+        }
+    }
+
+    fun msgidfixer(msgid: Int): Int{
+        @Suppress("DEPRECATION")
+        return msgid.toChar().toByte().toInt()
+    }
 }
 
 
