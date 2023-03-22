@@ -58,6 +58,7 @@ class DemoTransactionApp {
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
+        val numberOfTransactions = 1
         scope.launch {
             while (true) {
                 val overlay = ipv8.overlays.values.toList()[0]
@@ -69,20 +70,20 @@ class DemoTransactionApp {
                 // unencrypted Basic block creation with the same content and the same addresses
                 var blockBuilder = ProposalBlockBuilder(myPeer, store, "test1", mapOf<String, Any>(), myKey.pub().keyToBin())
                 if (community.getPeers().isNotEmpty()) {
-                    for (i in 1..100) {
+                    for (i in 1..numberOfTransactions) {
                         community.sendTransaction(blockBuilder, community.getPeers()[0])
                     }
                 }
 
                 // unencrypted Basic block creation with the random content and random addresses
                 blockBuilder = ProposalBlockBuilder(myPeer, store, "test2", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..100) {
+                for (i in 1..numberOfTransactions) {
                     community.sendTransaction(blockBuilder)
                 }
 
                 // encrypted random blocks
                 blockBuilder = ProposalBlockBuilder(myPeer, store, "test3", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..100) {
+                for (i in 1..numberOfTransactions) {
                     community.sendTransaction(blockBuilder, encrypt = true)
                 }
             }

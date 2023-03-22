@@ -56,7 +56,7 @@ open class TransactionEngineImpl (
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
-            serializePacket(MessageId.HALF_BLOCK_ENCRYPTED, payload, false, encrypt = true)
+            serializePacket(MessageId.HALF_BLOCK_ENCRYPTED, payload, false, encrypt = true, recipient = peer)
         } else {
             serializePacket(MessageId.HALF_BLOCK, payload, false)
         }
@@ -66,13 +66,13 @@ open class TransactionEngineImpl (
 
     private fun sendBlockBroadcast(block: TrustChainBlock, encrypt: Boolean) {
         val payload = HalfBlockBroadcastPayload.fromHalfBlock(block, ttl.toUInt())
-        val data = if (encrypt) {
-            serializePacket(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED, payload, false, encrypt = true)
-        } else {
-            serializePacket(MessageId.HALF_BLOCK_BROADCAST, payload, false)
-        }
         val randomPeers = getPeers().random(broadcastFanOut)
         for (randomPeer in randomPeers) {
+            val data = if (encrypt) {
+                serializePacket(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED, payload, false, encrypt = true, recipient = randomPeer)
+            } else {
+                serializePacket(MessageId.HALF_BLOCK_BROADCAST, payload, false)
+            }
             send(randomPeer, data)
         }
     }
