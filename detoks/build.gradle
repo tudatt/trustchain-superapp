@@ -39,7 +39,11 @@ android {
 
 dependencies {
     implementation project(':common')
-    implementation project(':ipv8-jvm')
+    api(project(':ipv8-jvm')) {
+        exclude group: 'net.java.dev.jna'
+        exclude group: 'org.slf4j'
+        exclude group: 'com.goterl'
+    }
 
     // AndroidX
     implementation 'androidx.appcompat:appcompat:1.6.1'
