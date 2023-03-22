@@ -62,7 +62,11 @@ import nl.tudelft.trustchain.common.bitcoin.WalletService
 import nl.tudelft.trustchain.common.eurotoken.GatewayStore
 import nl.tudelft.trustchain.common.eurotoken.TransactionRepository
 import nl.tudelft.trustchain.currencyii.CoinCommunity
+<<<<<<< HEAD
 import nl.tudelft.trustchain.detoks.DetoksTrustChainCommunity
+=======
+import nl.tudelft.trustchain.detoks.DeToksCommunity
+>>>>>>> f5dd56d76830bff0626cec1f452c623cdbc8c2d0
 import nl.tudelft.trustchain.eurotoken.community.EuroTokenCommunity
 import nl.tudelft.trustchain.eurotoken.db.TrustStore
 import nl.tudelft.trustchain.gossipML.RecommenderCommunity
@@ -119,7 +123,8 @@ class TrustChainApplication : Application() {
                 createLiteratureCommunity(),
                 createRecommenderCommunity(),
                 createIdentityCommunity(),
-                createFOCCommunity()
+                createFOCCommunity(),
+                createDeToksCommunity()
             ),
             walkerInterval = 5.0
         )
@@ -455,6 +460,14 @@ class TrustChainApplication : Application() {
         val randomWalk = RandomWalk.Factory()
         return OverlayConfiguration(
             FOCCommunity.Factory(this),
+            listOf(randomWalk)
+        )
+    }
+
+    private fun createDeToksCommunity(): OverlayConfiguration<DeToksCommunity> {
+        val randomWalk = RandomWalk.Factory()
+        return OverlayConfiguration(
+            DeToksCommunity.Factory(this),
             listOf(randomWalk)
         )
     }
