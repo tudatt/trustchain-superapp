@@ -66,8 +66,25 @@ class DemoTransactionApp {
                 delay(5000)
                 val community = ipv8.getOverlay<LightweightTxCommunity>()!!
 
-                val blockBuilder = ProposalBlockBuilder(myPeer, store, "type", mapOf<String, Any>(), myKey.pub().keyToBin())
-                community.sendTransaction(blockBuilder)
+                // unencrypted Basic block creation with the same content and the same addresses
+                var blockBuilder = ProposalBlockBuilder(myPeer, store, "test1", mapOf<String, Any>(), myKey.pub().keyToBin())
+                if (community.getPeers().isNotEmpty()) {
+                    for (i in 1..100) {
+                        community.sendTransaction(blockBuilder, community.getPeers()[0])
+                    }
+                }
+
+                // unencrypted Basic block creation with the random content and random addresses
+                blockBuilder = ProposalBlockBuilder(myPeer, store, "test2", mapOf<String, Any>(), myKey.pub().keyToBin())
+                for (i in 1..100) {
+                    community.sendTransaction(blockBuilder)
+                }
+
+                // encrypted random blocks
+                blockBuilder = ProposalBlockBuilder(myPeer, store, "test3", mapOf<String, Any>(), myKey.pub().keyToBin())
+                for (i in 1..100) {
+                    community.sendTransaction(blockBuilder, encrypt = true)
+                }
             }
         }
 
