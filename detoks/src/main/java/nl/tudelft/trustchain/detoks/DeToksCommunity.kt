@@ -2,13 +2,14 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import android.util.Log
-import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.messaging.Packet
 
 
-class DeToksCommunity(private val context: Context) : Community() {
+class DeToksCommunity(
+    private val context: Context
+    ) : TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25") {
 
     private val walletManager = WalletManager(context)
     private val visitedPeers  = mutableListOf<Peer>()
@@ -24,9 +25,6 @@ class DeToksCommunity(private val context: Context) : Community() {
         const val MESSAGE_TRANSACTION_ID = 2
 
     }
-
-    override val serviceId = "c86a7db45eb3563ae047639817baec4db2bc7c25"
-
 
     fun sendTokens(amount: Int, recipientMid: String) {
         val senderWallet = walletManager.getOrCreateWallet(myPeer.mid)
