@@ -30,7 +30,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
     }
 
-    fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean) {
+    fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean = false) {
         println("sending block...")
         val block = blockBuilder.sign()
 
