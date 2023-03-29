@@ -1,5 +1,9 @@
 package nl.tudelft.trustchain.detoks
 
+import android.content.Context
+import android.provider.ContactsContract.Data
+import androidx.core.content.ContentProviderCompat.requireContext
+import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import nl.tudelft.ipv8.Community
@@ -184,6 +188,8 @@ open class TransactionEngine (override val serviceId: String): Community() {
         return System.nanoTime() - startTime
     }
 
+    // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
+    // oposed to the previously used BasicBlocks.
     private fun unencryptedRandomSignedTrustChain(key: PrivateKey) : Long {
         val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         Database.Schema.create(driver)
@@ -204,7 +210,48 @@ open class TransactionEngine (override val serviceId: String): Community() {
 
         }
         return System.nanoTime() - startTime
+    }
 
+    // This method can be used to benchmark the creation of signed blocks that are stored in a proper database.
+    private fun unenctryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
+        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+        val random = Random()
+        val startTime = System.nanoTime()
+
+        for (i in 0 .. 1000) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            blockBuilder.sign()
+        }
+        return System.nanoTime() - startTime
+    }
+
+    private fun unencryptedRandomSaveDeviceTransfer(key: PrivateKey, context: Context) : Long {
+        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+        val random = Random()
+        val startTime = System.nanoTime()
+
+        for (i in 0 .. 1000) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            blockBuilder.sign()
+
+            // We need to have a way to send a message to an unverified peer.
+//            send(myPeer, )
+        }
+        return System.nanoTime() - startTime
     }
 
 
