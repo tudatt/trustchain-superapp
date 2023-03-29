@@ -1,15 +1,22 @@
 package nl.tudelft.trustchain.detoks
 
+import com.squareup.sqldelight.db.SqlDriver
+import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.attestation.trustchain.BlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainBlock
+import nl.tudelft.ipv8.attestation.trustchain.UNKNOWN_SEQ
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockBroadcastPayload
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
+import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
+import nl.tudelft.ipv8.keyvault.PrivateKey
 import nl.tudelft.ipv8.messaging.Packet
+import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
+import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
 
 open class TransactionEngine (override val serviceId: String): Community() {
@@ -104,6 +111,104 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
     }
 
+    // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
+    private fun unencryptedBasicSameContent() : Long {
+        val type : String = "benchmark"
+        val message : ByteArray = "benchmarkMessage".toByteArray()
+        val senderPublicKey : ByteArray = "fakeKey".toByteArray()
+        val receiverPublicKey : ByteArray = "fakeReceiverKey".toByteArray()
+        var startTime = System.nanoTime()
+
+        var blockList : ArrayList<BasicBlock> = ArrayList()
+
+        for (i in 0..1000) {
+            blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+        }
+
+        println(blockList.size)
+
+        return System.nanoTime() - startTime
+    }
+
+    // this method can be use to benchmark unencrypted basic block creation with random content and random addresses.
+    // We assume 64 byte public key.
+    private fun unencryptedBasicRandom() : Long {
+        val type : String = "benchmarkRandom"
+        val senderPublicKey : ByteArray = "fakeKey".toByteArray()
+        val startTime = System.nanoTime()
+
+        val random : Random = Random()
+
+        // In order to avoid compiler optimisations, we store the blocks in a list and print the size of that list.
+        var blockList : ArrayList<BasicBlock> = ArrayList()
+
+        for (i in 0 .. 1000) {
+            var receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            var message = ByteArray(200)
+            random.nextBytes(message)
+
+            blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+        }
+
+        println(blockList.size)
+
+        return System.nanoTime() - startTime
+    }
+
+    // This method will be used to benchmark the creation of random blocks with a signature.
+
+    private fun unencryptedRandomSigned(key : PrivateKey) : Long {
+        val type : String = "benchmarkRandomSigned"
+        val senderPublicKey : ByteArray = key.pub().keyToBin()
+        val startTime = System.nanoTime()
+
+        val random : Random = Random()
+        val blockList : ArrayList<BasicBlock> = ArrayList()
+
+        for (i in 0 .. 1000) {
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val message = ByteArray(200)
+            random.nextBytes(message)
+
+            val block : BasicBlock = (BasicBlock(type, message, senderPublicKey, receiverPublicKey, ByteArray(0)))
+            block.sign(key)
+            blockList.add(block)
+        }
+
+        println(blockList.size)
+
+        return System.nanoTime() - startTime
+    }
+
+    private fun unencryptedRandomSignedTrustChain(key: PrivateKey) : Long {
+        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        Database.Schema.create(driver)
+        val store = TrustChainSQLiteStore(Database(driver))
+
+        val random = Random()
+        val startTime = System.nanoTime()
+
+        for (i in 0 .. 1000) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            blockBuilder.sign()
+
+        }
+        return System.nanoTime() - startTime
+
+    }
+
+
+
     private fun msgIdFixer(msgid: Int): Int{
         @Suppress("DEPRECATION")
         return msgid.toChar().toByte().toInt()
@@ -114,4 +219,20 @@ open class TransactionEngine (override val serviceId: String): Community() {
             return TransactionEngine(serviceId)
         }
     }
+}
+
+class SimpleBlockBuilder(
+    myPeer : Peer,
+    database: TrustChainSQLiteStore,
+    private val blockType: String,
+    private val transaction: ByteArray,
+    private val publicKey: ByteArray
+) : BlockBuilder(myPeer, database){
+    override fun update(builder: TrustChainBlock.Builder) {
+        builder.type = blockType
+        builder.rawTransaction = transaction
+        builder.linkPublicKey = publicKey
+        builder.linkSequenceNumber = UNKNOWN_SEQ
+    }
+
 }
