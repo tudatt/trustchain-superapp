@@ -28,7 +28,7 @@ class DemoTransactionApp {
     private fun createCommunity(): OverlayConfiguration<TransactionEngine> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            TransactionEngine.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
+            TransactionEngine.Factory(DetoksConfig.DETOKS_SERVICE_ID),
             listOf(randomWalk)
         )
     }
