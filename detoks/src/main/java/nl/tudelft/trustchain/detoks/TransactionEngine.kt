@@ -10,11 +10,13 @@ import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
 import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.util.random
 import java.util.*
+import mu.KotlinLogging
 
 
 open class TransactionEngine (override val serviceId: String): Community() {
     private val broadcastFanOut = 25
     private val ttl = 100
+    private val logger = KotlinLogging.logger {}
 
     object MessageId {
         const val HALF_BLOCK = 4242
@@ -31,7 +33,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
     }
 
     fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean = false) {
-        println("sending block...")
+        logger.info { "Sending transaction..." }
         val block = blockBuilder.sign()
 
         if (peer != null) {
@@ -67,11 +69,11 @@ open class TransactionEngine (override val serviceId: String): Community() {
     }
 
     private fun onHalfBlockPacket(packet: Packet) {
-        println("half block packet received from: " + packet.source.toString())
+        logger.info { ("Half block packet received from: " + packet.source.toString()) }
     }
 
     private fun onHalfBlockBroadcastPacket(packet: Packet) {
-        println("half block packet received from broadcast from: " + packet.source.toString())
+        logger.info { ("Half block packet received from broadcast from: " + packet.source.toString()) }
     }
 
     override fun onPacket(packet: Packet) {
@@ -100,7 +102,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
                 e.printStackTrace()
             }
         } else {
-            println("Received unknown message $msgId from $sourceAddress")
+            logger.info { "Received unknown message $msgId from $sourceAddress" }
         }
     }
 
