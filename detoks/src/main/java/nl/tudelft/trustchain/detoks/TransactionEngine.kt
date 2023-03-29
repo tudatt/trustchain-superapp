@@ -27,11 +27,17 @@ open class TransactionEngine (override val serviceId: String): Community() {
     private val broadcastFanOut = 25
     private val ttl = 100
 
+    private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
+    private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
+
     object MessageId {
         const val HALF_BLOCK = 4242
         const val HALF_BLOCK_ENCRYPTED = 4243
         const val HALF_BLOCK_BROADCAST = 424242
         const val HALF_BLOCK_BROADCAST_ENCRYPTED = 424243
+        const val BLOCK_UNENCRYPTED = 35007
+        const val BLOCK_ENCRYPTED = 350072
+
     }
 
     init {
@@ -231,8 +237,29 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
         return System.nanoTime() - startTime
     }
+    // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
+    private fun unencryptedRandomSendIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
+        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
+        val random = Random()
+        val startTime = System.nanoTime()
 
-    private fun unencryptedRandomSaveDeviceTransfer(key: PrivateKey, context: Context) : Long {
+        for (i in 0 .. 1000) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            val payload = HalfBlockPayload.fromHalfBlock(blockBuilder.sign())
+            val data = serializePacket(MessageId.BLOCK_UNENCRYPTED, payload, false)
+            send(peer, data)
+        }
+        return System.nanoTime() - startTime
+    }
+
+    // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
+    private fun encryptedRandomSendIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
         val random = Random()
@@ -242,19 +269,24 @@ open class TransactionEngine (override val serviceId: String): Community() {
             val message = ByteArray(200)
             random.nextBytes(message)
 
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
-
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
-            blockBuilder.sign()
-
-            // We need to have a way to send a message to an unverified peer.
-//            send(myPeer, )
+            val payload = HalfBlockPayload.fromHalfBlock(blockBuilder.sign())
+            val data = serializePacket(MessageId.BLOCK_ENCRYPTED, payload, false, encrypt = true, recipient = peer)
+            send(peer, data)
         }
         return System.nanoTime() - startTime
     }
 
-
+    // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
+    private fun onUnencryptedRandomIPv8Packet(packet: Packet) {
+        val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        incomingUnencryptedBlocks.add(payload)
+    }
+    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
+    private fun onEncryptedRandomIPv8Packet(packet: Packet) {
+        val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        incomingEncryptedBlocks.add(payload)
+    }
 
     private fun msgIdFixer(msgid: Int): Int{
         @Suppress("DEPRECATION")
