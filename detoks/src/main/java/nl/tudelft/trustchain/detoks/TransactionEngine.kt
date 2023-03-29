@@ -276,6 +276,22 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
         return System.nanoTime() - startTime
     }
+    // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
+    private fun unencryptedRandomReceiveIPv8() : Long {
+        val startTime = System.nanoTime()
+        while (incomingUnencryptedBlocks.size<=1000) {
+            // wait for all 1000 blocks to be received
+        }
+        return System.nanoTime() - startTime
+    }
+    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
+    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
+        val startTime = System.nanoTime()
+        while (incomingUnencryptedBlocks.size<=1000) {
+            // wait for all 1000 blocks to be received
+        }
+        return System.nanoTime() - startTime
+    }
 
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
     private fun onUnencryptedRandomIPv8Packet(packet: Packet) {
