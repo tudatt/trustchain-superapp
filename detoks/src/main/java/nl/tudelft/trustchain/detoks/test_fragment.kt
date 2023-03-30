@@ -1,5 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
+import android.app.AlertDialog
 import android.content.Context
 import android.os.Bundle
 import android.view.Gravity
@@ -12,6 +13,8 @@ import android.widget.TextView
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.squareup.sqldelight.android.AndroidSqliteDriver
+import com.squareup.sqldelight.db.SqlDriver
+import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import kotlinx.android.synthetic.main.test_fragment_layout.*
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.android.IPv8Android
@@ -38,7 +41,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
     lateinit var trustchainInstance: DetoksTrustChainCommunity
-    lateinit var deToksCommunity: DeToksCommunity
+//    lateinit var deToksCommunity: DeToksCommunity
 
 
     var benchmarkStartTime : Long = 0
@@ -47,6 +50,19 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     var highestReceivedBenchmarkCounter : Int = 0
     var benchmarkCounter : Int = 0
 
+
+    private fun createTrustChainCommunity(): OverlayConfiguration<TrustChainCommunity> {
+        val settings = TrustChainSettings()
+        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        Database.Schema.create(driver)
+        val database = Database(driver)
+        val store = TrustChainSQLiteStore(database)
+        val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
+        return OverlayConfiguration(
+            TrustChainCommunity.Factory(settings, store),
+            listOf(randomWalk)
+        )
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -73,7 +89,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
 
         // get the deToksCommunity for use in the benchmark
-        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
+//        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // DEFINE BEHAVIOR BOOTSTRAP SERVERS
 
@@ -115,6 +131,11 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             }
         }
 
+        val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
+        benchmarkDialogButton.setOnClickListener {
+            showBenchmarkDialog()
+        }
+
         val benchmarkTextView = benchmarkStatusTextView
         benchmarkTextView.text = "Currently not running a benchmark."
 
@@ -128,7 +149,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
-        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
+//        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // Call this method to register the validator.
         registerValidator()
@@ -228,6 +249,55 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
             }
         })
+    }
+
+    private fun showBenchmarkDialog() {
+        val builder = AlertDialog.Builder(requireContext()).create()
+        val view = layoutInflater.inflate(R.layout.benchmark_dialog_layout, null)
+        val button1 = view.findViewById<Button>(R.id.benchmarkButton1)
+        val button2 = view.findViewById<Button>(R.id.benchmarkButton2)
+        val button3 = view.findViewById<Button>(R.id.benchmarkButton3)
+        val button4 = view.findViewById<Button>(R.id.benchmarkButton4)
+        val button5 = view.findViewById<Button>(R.id.benchMarkButton5)
+        val button6 = view.findViewById<Button>(R.id.benchmarkButton6)
+//        val button7 = view.findViewById<Button>(R.id.benchmarkButton7)
+
+        val resultTextView = view.findViewById<TextView>(R.id.resultTimeTextView)
+
+        builder.setView(view)
+        val engine = TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25")
+        val engineBenchmark = TransactionEngineBenchmark(engine, Peer(getPrivateKey(requireContext())) )
+
+        button1.setOnClickListener {
+            val result = engineBenchmark.unencryptedBasicSameContent()
+            resultTextView.text = result.toString()
+        }
+
+        button2.setOnClickListener {
+            val result = engineBenchmark.unencryptedBasicRandom()
+            resultTextView.text = result.toString()
+        }
+
+        button3.setOnClickListener {
+            val result = engineBenchmark.unencryptedRandomSigned(getPrivateKey(requireContext()))
+            resultTextView.text = result.toString()
+        }
+
+        button4.setOnClickListener {
+            val result = engineBenchmark.unencryptedRandomSignedTrustChain(getPrivateKey(requireContext()))
+            resultTextView.text = result.toString()
+        }
+
+        button5.setOnClickListener {
+            val result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(getPrivateKey(requireContext()), requireContext())
+            resultTextView.text = result.toString()
+        }
+
+        button6.setOnClickListener {
+            println("Please implement me")
+        }
+        builder.setCanceledOnTouchOutside(true)
+        builder.show()
     }
 
     // We also register a TransactionValidator. This one is simple and checks whether "test_block"s are valid.

@@ -159,7 +159,7 @@ open class TransactionEngineBenchmark(
     // ======================== BLOCK CREATION METHODS =========================
 
     // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
-    private fun unencryptedBasicSameContent() : Long {
+    fun unencryptedBasicSameContent() : Long {
         val type : String = "benchmark"
         val message : ByteArray = "benchmarkMessage".toByteArray()
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
@@ -179,7 +179,7 @@ open class TransactionEngineBenchmark(
 
     // this method can be use to benchmark unencrypted basic block creation with random content and random addresses.
     // We assume 64 byte public key.
-    private fun unencryptedBasicRandom() : Long {
+    fun unencryptedBasicRandom() : Long {
         val type : String = "benchmarkRandom"
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
         val startTime = System.nanoTime()
@@ -206,7 +206,7 @@ open class TransactionEngineBenchmark(
 
     // This method will be used to benchmark the creation of random blocks with a signature.
 
-    private fun unencryptedRandomSigned(key : PrivateKey) : Long {
+    fun unencryptedRandomSigned(key : PrivateKey) : Long {
         val type : String = "benchmarkRandomSigned"
         val senderPublicKey : ByteArray = key.pub().keyToBin()
         val startTime = System.nanoTime()
@@ -233,7 +233,7 @@ open class TransactionEngineBenchmark(
 
     // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
     // oposed to the previously used BasicBlocks.
-    private fun unencryptedRandomSignedTrustChain(key: PrivateKey) : Long {
+    fun unencryptedRandomSignedTrustChain(key: PrivateKey) : Long {
         val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         Database.Schema.create(driver)
         val store = TrustChainSQLiteStore(Database(driver))
@@ -256,7 +256,7 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the creation of signed blocks that are stored in a proper database.
-    private fun unencryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
+    fun unencryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
         val random = Random()
@@ -331,21 +331,21 @@ open class TransactionEngineBenchmark(
     // ======================== RECEIVERS ================================
 
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
-    private fun unencryptedRandomReceiveIPv8() : Long {
-        val startTime = System.nanoTime()
-        while (incomingUnencryptedBlocks.size<=1000) {
-            // wait for all 1000 blocks to be received
-        }
-        return System.nanoTime() - startTime
-    }
-    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
-        val startTime = System.nanoTime()
-        while (incomingUnencryptedBlocks.size<=1000) {
-            // wait for all 1000 blocks to be received
-        }
-        return System.nanoTime() - startTime
-    }
+//    private fun unencryptedRandomReceiveIPv8() : Long {
+//        val startTime = System.nanoTime()
+//        while (incomingUnencryptedBlocks.size<=1000) {
+//            // wait for all 1000 blocks to be received
+//        }
+//        return System.nanoTime() - startTime
+//    }
+//    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
+//    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
+//        val startTime = System.nanoTime()
+//        while (incomingUnencryptedBlocks.size<=1000) {
+//            // wait for all 1000 blocks to be received
+//        }
+//        return System.nanoTime() - startTime
+//    }
 
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
     private fun onUnencryptedRandomIPv8Packet(packet: Packet) {

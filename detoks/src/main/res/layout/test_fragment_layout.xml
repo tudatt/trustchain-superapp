@@ -52,7 +52,7 @@
         app:layout_constraintBottom_toTopOf="@+id/proposalsListView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/benchmarkStatusTextView" />
+        app:layout_constraintTop_toBottomOf="@+id/bootstrapButton" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/proposalsListView"
@@ -62,15 +62,21 @@
 
     <Button
         android:id="@+id/bootstrapButton"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:onClick="showBootstraps"
         android:text="info"
         android:textAllCaps="false"
-        tools:layout_editor_absoluteX="320dp"
-        tools:layout_editor_absoluteY="5dp"
-        android:onClick="showBootstraps"
-        />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/benchmarkStatusTextView" />
 
+    <Button
+        android:id="@+id/benchmark_window_button"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Benchmark"
+        app:layout_constraintBottom_toTopOf="@+id/peerListView"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

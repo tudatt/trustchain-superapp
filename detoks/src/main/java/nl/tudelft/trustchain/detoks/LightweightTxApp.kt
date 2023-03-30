@@ -50,7 +50,6 @@ class DemoTransactionApp {
 
         val community = ipv8.getOverlay<TransactionEngine>()!!
         val txBenchmark = TransactionEngineBenchmark(community, myPeer)
-        val numberOfTransactions = 1
         scope.launch {
             while (true) {
                 val overlay = ipv8.overlays.values.toList()[0]
