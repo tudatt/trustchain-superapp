@@ -10,7 +10,7 @@ class BasicBlock (
     val senderPublicKey: ByteArray,
     val receiverPublicKey: ByteArray,
     var signature: ByteArray
-    ) {
+) {
     // This class represents the basic blocks that we will use in the first several layers of benchmarking.
 
     fun sign(key: PrivateKey) {

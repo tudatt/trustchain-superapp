@@ -54,7 +54,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
     }
 
-     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
+    fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
         messageHandlers[onMessageId] = receiver
     }
 
@@ -152,7 +152,7 @@ class SimpleBlockBuilder(
 open class TransactionEngineBenchmark(
     private val txEngineUnderTest: TransactionEngine,
     private val myPeer: Peer
-    ){
+){
     private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
     private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
 
