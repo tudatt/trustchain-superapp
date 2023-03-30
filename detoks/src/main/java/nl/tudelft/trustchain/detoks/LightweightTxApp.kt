@@ -1,27 +1,20 @@
 package nl.tudelft.trustchain.detoks
 
-import android.media.session.MediaSession.Token
-import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
+import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.tudelft.ipv8.*
-import nl.tudelft.ipv8.attestation.trustchain.TrustChainCommunity
-import nl.tudelft.ipv8.attestation.trustchain.TrustChainSettings
-import nl.tudelft.ipv8.attestation.trustchain.payload.CrawlRequestPayload
+import nl.tudelft.ipv8.attestation.trustchain.ProposalBlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.JavaCryptoProvider
 import nl.tudelft.ipv8.messaging.EndpointAggregator
 import nl.tudelft.ipv8.messaging.udp.UdpEndpoint
-import nl.tudelft.ipv8.peerdiscovery.DiscoveryCommunity
-import nl.tudelft.ipv8.peerdiscovery.strategy.PeriodicSimilarity
-import nl.tudelft.ipv8.peerdiscovery.strategy.RandomChurn
 import nl.tudelft.ipv8.peerdiscovery.strategy.RandomWalk
 import nl.tudelft.ipv8.sqldelight.Database
 import java.net.InetAddress
-import java.security.AccessController.getContext
 import java.util.*
 import kotlin.math.roundToInt
 
@@ -32,33 +25,10 @@ class DemoTransactionApp {
         startIpv8()
     }
 
-    private fun createDiscoveryCommunity(): OverlayConfiguration<DiscoveryCommunity> {
-        val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
-        val randomChurn = RandomChurn.Factory()
-        val periodicSimilarity = PeriodicSimilarity.Factory()
-        return OverlayConfiguration(
-            DiscoveryCommunity.Factory(),
-            listOf(randomWalk, randomChurn, periodicSimilarity)
-        )
-    }
-
-    private fun createTrustChainCommunity(): OverlayConfiguration<TrustChainCommunity> {
-        val settings = TrustChainSettings()
-        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        Database.Schema.create(driver)
-        val database = Database(driver)
-        val store = TrustChainSQLiteStore(database)
+    private fun createCommunity(): OverlayConfiguration<TransactionEngine> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            TrustChainCommunity.Factory(settings, store),
-            listOf(randomWalk)
-        )
-    }
-
-    private fun createDemoCommunity(): OverlayConfiguration<DeToksCommunity> {
-        val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
-        return OverlayConfiguration(
-            DeToksCommunity.Factory(),
+            TransactionEngine.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
             listOf(randomWalk)
         )
     }
@@ -70,29 +40,33 @@ class DemoTransactionApp {
         val endpoint = EndpointAggregator(udpEndpoint, null)
 
         val config = IPv8Configuration(overlays = listOf(
-            // createDiscoveryCommunity(),
-            // createTrustChainCommunity(),
-            createDemoCommunity()
+            createCommunity()
         ), walkerInterval = 1.0)
+
+
 
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
+        val community = ipv8.getOverlay<TransactionEngine>()!!
+        val txBenchmark = TransactionEngineBenchmark(community, myPeer)
+        val numberOfTransactions = 1
         scope.launch {
             while (true) {
-                /*for ((_, overlay) in ipv8.overlays) {
-                    printPeersInfo(overlay)
-                }*/
                 val overlay = ipv8.overlays.values.toList()[0]
                 printPeersInfo(overlay)
                 println("===")
                 delay(5000)
-                val community = ipv8.getOverlay<DeToksCommunity>()!!
-                val peers = community.getPeers()
-                for (peer in peers) {
-                    val packet = community.serializePacket(21, TorrentMessage("HelloWorld"))
-                    community.sendRandom(peer.address, packet)
-                }
+
+
+                // unencrypted Basic block creation with the same content and the same addresses
+                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
+
+                // unencrypted Basic block creation with the random content and random addresses
+                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
+
+                // encrypted random blocks
+                txBenchmark.encryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
             }
         }
 
@@ -125,4 +99,3 @@ fun main() {
     val app = DemoTransactionApp()
     app.run()
 }
-

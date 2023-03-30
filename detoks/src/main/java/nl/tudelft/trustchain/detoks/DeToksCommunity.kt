@@ -2,7 +2,6 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import android.util.Log
-import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.attestation.trustchain.*
@@ -19,10 +18,9 @@ import nl.tudelft.ipv8.util.toHex
 
 
 class DeToksCommunity(
-    private val context: Context,
-    private val settings: TrustChainSettings,
-    private val database: TrustChainStore
-) : Community() {
+    private val context: Context
+    ) : TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25") {
+
 
     private val walletManager = WalletManager(context)
     private val visitedPeers = mutableListOf<Peer>()
