@@ -4,7 +4,6 @@ import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.attestation.trustchain.ProposalBlockBuilder
@@ -51,34 +50,41 @@ class DemoTransactionApp {
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
-        val numberOfTransactions = 1
         scope.launch {
             while (true) {
+                val command = readLine()!!
+                println("User said: $command")
+
                 val overlay = ipv8.overlays.values.toList()[0]
                 printPeersInfo(overlay)
-                println("===")
-                delay(5000)
+
                 val community = ipv8.getOverlay<TransactionEngine>()!!
 
-                // unencrypted Basic block creation with the same content and the same addresses
-                var blockBuilder = ProposalBlockBuilder(myPeer, store, "test1", mapOf<String, Any>(), myKey.pub().keyToBin())
-                if (community.getPeers().isNotEmpty()) {
-                    for (i in 1..numberOfTransactions) {
+                if (command == "send") {
+                    println("Sending single proposal...")
+                    val blockBuilder = ProposalBlockBuilder(myPeer, store, "test1",
+                                                            mapOf<String, Any>(),
+                                                            myKey.pub().keyToBin())
+                    if (community.getPeers().isNotEmpty()) {
                         community.sendTransaction(blockBuilder=blockBuilder,
                                                   community.getPeers()[0])
+
                     }
-                }
-
-                // unencrypted Basic block creation with the random content and random addresses
-                blockBuilder = ProposalBlockBuilder(myPeer, store, "test2", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..numberOfTransactions) {
-                    community.sendTransaction(blockBuilder, null)
-                }
-
-                // encrypted random blocks
-                blockBuilder = ProposalBlockBuilder(myPeer, store, "test3", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..numberOfTransactions) {
-                    community.sendTransaction(blockBuilder, null, encrypt = true)
+                    println("Proposal sent")
+                } else if (command == "send-1000") {
+                    println("Sending 1000 proposals...")
+                    val blockBuilder = ProposalBlockBuilder(myPeer, store, "test1000",
+                        mapOf<String, Any>(),
+                        myKey.pub().keyToBin())
+                    if (community.getPeers().isNotEmpty()) {
+                        for (i in 1..1000) {
+                            community.sendTransaction(blockBuilder=blockBuilder,
+                                community.getPeers()[0])
+                        }
+                    }
+                    println("1000 proposals sent")
+                } else {
+                    println("Unknown command: $command")
                 }
             }
         }
