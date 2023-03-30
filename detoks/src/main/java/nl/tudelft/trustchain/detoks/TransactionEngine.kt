@@ -19,17 +19,17 @@ open class TransactionEngine (override val serviceId: String): Community() {
     private val logger = KotlinLogging.logger {}
 
     object MessageId {
-        const val HALF_BLOCK = 4242
-        const val HALF_BLOCK_ENCRYPTED = 4243
-        const val HALF_BLOCK_BROADCAST = 424242
-        const val HALF_BLOCK_BROADCAST_ENCRYPTED = 424243
+        const val HALF_BLOCK: Int = 11
+        const val HALF_BLOCK_ENCRYPTED: Int = 12
+        const val HALF_BLOCK_BROADCAST: Int = 13
+        const val HALF_BLOCK_BROADCAST_ENCRYPTED: Int = 14
     }
 
     init {
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK)] = ::onHalfBlockPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST)] = ::onHalfBlockBroadcastPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_ENCRYPTED)] = ::onHalfBlockPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
+        messageHandlers[MessageId.HALF_BLOCK] = ::onHalfBlockPacket
+        messageHandlers[MessageId.HALF_BLOCK_BROADCAST] = ::onHalfBlockBroadcastPacket
+        messageHandlers[MessageId.HALF_BLOCK_ENCRYPTED] = ::onHalfBlockPacket
+        messageHandlers[MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED] = ::onHalfBlockBroadcastPacket
     }
 
     fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean = false) {
@@ -104,11 +104,6 @@ open class TransactionEngine (override val serviceId: String): Community() {
         } else {
             logger.info { "Received unknown message $msgId from $sourceAddress" }
         }
-    }
-
-    private fun msgIdFixer(msgid: Int): Int{
-        @Suppress("DEPRECATION")
-        return msgid.toChar().toByte().toInt()
     }
 
     class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngine>(TransactionEngine::class.java) {
