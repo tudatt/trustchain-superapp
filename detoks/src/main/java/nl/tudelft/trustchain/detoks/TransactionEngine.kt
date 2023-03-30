@@ -20,15 +20,18 @@ import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
+import java.util.function.Consumer
 import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
+interface TransactionEngine {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean = false)
 
-open class TransactionEngine (override val serviceId: String): Community() {
+    fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit)
+}
+
+open class TransactionEngineImpl (override val serviceId: String): TransactionEngine, Community() {
     private val broadcastFanOut = 25
     private val ttl = 100
-
-    private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
-    private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
 
     object MessageId {
         const val HALF_BLOCK = 4242
@@ -47,15 +50,18 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
     }
 
-    fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean = false) {
+    override fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean) {
         println("sending block...")
-        val block = blockBuilder.sign()
 
         if (peer != null) {
             sendBlockToRecipient(peer, block, encrypt)
         } else {
             sendBlockBroadcast(block, encrypt)
         }
+    }
+
+    override fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
+        messageHandlers[onMessageId] = receiver
     }
 
     private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean) {
@@ -120,6 +126,43 @@ open class TransactionEngine (override val serviceId: String): Community() {
             println("Received unknown message $msgId from $sourceAddress")
         }
     }
+
+    private fun msgIdFixer(msgid: Int): Int{
+        @Suppress("DEPRECATION")
+        return msgid.toChar().toByte().toInt()
+    }
+
+    class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngineImpl>(TransactionEngineImpl::class.java) {
+        override fun create(): TransactionEngineImpl {
+            return TransactionEngineImpl(serviceId)
+        }
+    }
+}
+
+class SimpleBlockBuilder(
+    myPeer : Peer,
+    database: TrustChainSQLiteStore,
+    private val blockType: String,
+    private val transaction: ByteArray,
+    private val publicKey: ByteArray
+) : BlockBuilder(myPeer, database){
+    override fun update(builder: TrustChainBlock.Builder) {
+        builder.type = blockType
+        builder.rawTransaction = transaction
+        builder.linkPublicKey = publicKey
+        builder.linkSequenceNumber = UNKNOWN_SEQ
+    }
+
+}
+
+open class TransactionEngineBenchmark(
+    private val txEngineUnderTest: TransactionEngine,
+    private val myPeer: Peer
+    ){
+    private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
+    private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
+
+    // ======================== BLOCK CREATION METHODS =========================
 
     // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
     private fun unencryptedBasicSameContent() : Long {
@@ -219,7 +262,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
     }
 
     // This method can be used to benchmark the creation of signed blocks that are stored in a proper database.
-    private fun unenctryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
+    private fun unencryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
         val random = Random()
@@ -237,12 +280,22 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
         return System.nanoTime() - startTime
     }
+
+    // ============================== BLOCK SENDING METHODS ========================================
+
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    private fun unencryptedRandomSendIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
-        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+    fun unencryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+        val driver: SqlDriver = if(context!=null) {
+            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        } else {
+            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        }
+
         val store = TrustChainSQLiteStore(Database(driver))
         val random = Random()
         val startTime = System.nanoTime()
+
+        txEngineUnderTest.addReceiver(TransactionEngineImpl.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
 
         for (i in 0 .. 1000) {
             val message = ByteArray(200)
@@ -251,31 +304,38 @@ open class TransactionEngine (override val serviceId: String): Community() {
             random.nextBytes(receiverPublicKey)
 
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
-            val payload = HalfBlockPayload.fromHalfBlock(blockBuilder.sign())
-            val data = serializePacket(MessageId.BLOCK_UNENCRYPTED, payload, false)
-            send(peer, data)
+
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false)
         }
         return System.nanoTime() - startTime
     }
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    private fun encryptedRandomSendIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
-        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+    fun encryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+        val driver: SqlDriver = if(context!=null) {
+            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        } else {
+            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        }
         val store = TrustChainSQLiteStore(Database(driver))
         val random = Random()
         val startTime = System.nanoTime()
+
+        txEngineUnderTest.addReceiver(TransactionEngineImpl.MessageId.HALF_BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
 
         for (i in 0 .. 1000) {
             val message = ByteArray(200)
             random.nextBytes(message)
 
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
-            val payload = HalfBlockPayload.fromHalfBlock(blockBuilder.sign())
-            val data = serializePacket(MessageId.BLOCK_ENCRYPTED, payload, false, encrypt = true, recipient = peer)
-            send(peer, data)
+
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true)
         }
         return System.nanoTime() - startTime
     }
+
+    // ======================== RECEIVERS ================================
+
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
     private fun unencryptedRandomReceiveIPv8() : Long {
         val startTime = System.nanoTime()
@@ -302,32 +362,6 @@ open class TransactionEngine (override val serviceId: String): Community() {
     private fun onEncryptedRandomIPv8Packet(packet: Packet) {
         val payload = packet.getPayload(HalfBlockPayload.Deserializer)
         incomingEncryptedBlocks.add(payload)
-    }
-
-    private fun msgIdFixer(msgid: Int): Int{
-        @Suppress("DEPRECATION")
-        return msgid.toChar().toByte().toInt()
-    }
-
-    class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngine>(TransactionEngine::class.java) {
-        override fun create(): TransactionEngine {
-            return TransactionEngine(serviceId)
-        }
-    }
-}
-
-class SimpleBlockBuilder(
-    myPeer : Peer,
-    database: TrustChainSQLiteStore,
-    private val blockType: String,
-    private val transaction: ByteArray,
-    private val publicKey: ByteArray
-) : BlockBuilder(myPeer, database){
-    override fun update(builder: TrustChainBlock.Builder) {
-        builder.type = blockType
-        builder.rawTransaction = transaction
-        builder.linkPublicKey = publicKey
-        builder.linkSequenceNumber = UNKNOWN_SEQ
     }
 
 }

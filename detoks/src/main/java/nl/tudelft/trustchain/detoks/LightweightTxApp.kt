@@ -25,10 +25,10 @@ class DemoTransactionApp {
         startIpv8()
     }
 
-    private fun createCommunity(): OverlayConfiguration<TransactionEngine> {
+    private fun createCommunity(): OverlayConfiguration<TransactionEngineImpl> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            TransactionEngine.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
+            TransactionEngineImpl.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
             listOf(randomWalk)
         )
     }
@@ -43,14 +43,13 @@ class DemoTransactionApp {
             createCommunity()
         ), walkerInterval = 1.0)
 
-        // storage
-        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        Database.Schema.create(driver)
-        val store = TrustChainSQLiteStore(Database(driver))
+
 
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
+        val community = ipv8.getOverlay<TransactionEngineImpl>()!!
+        val txBenchmark = TransactionEngineBenchmark(community, myPeer)
         val numberOfTransactions = 1
         scope.launch {
             while (true) {
@@ -58,28 +57,16 @@ class DemoTransactionApp {
                 printPeersInfo(overlay)
                 println("===")
                 delay(5000)
-                val community = ipv8.getOverlay<TransactionEngine>()!!
+
 
                 // unencrypted Basic block creation with the same content and the same addresses
-                var blockBuilder = ProposalBlockBuilder(myPeer, store, "test1", mapOf<String, Any>(), myKey.pub().keyToBin())
-                if (community.getPeers().isNotEmpty()) {
-                    for (i in 1..numberOfTransactions) {
-                        community.sendTransaction(blockBuilder=blockBuilder,
-                                                  community.getPeers()[0])
-                    }
-                }
+                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
 
                 // unencrypted Basic block creation with the random content and random addresses
-                blockBuilder = ProposalBlockBuilder(myPeer, store, "test2", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..numberOfTransactions) {
-                    community.sendTransaction(blockBuilder, null)
-                }
+                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
 
                 // encrypted random blocks
-                blockBuilder = ProposalBlockBuilder(myPeer, store, "test3", mapOf<String, Any>(), myKey.pub().keyToBin())
-                for (i in 1..numberOfTransactions) {
-                    community.sendTransaction(blockBuilder, null, encrypt = true)
-                }
+                txBenchmark.encryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
             }
         }
 
