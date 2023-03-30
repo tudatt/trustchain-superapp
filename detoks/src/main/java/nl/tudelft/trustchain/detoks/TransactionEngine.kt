@@ -23,13 +23,7 @@ import java.util.*
 import java.util.function.Consumer
 import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
-interface TransactionEngine {
-    fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean = false)
-
-    fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit)
-}
-
-open class TransactionEngineImpl (override val serviceId: String): TransactionEngine, Community() {
+open class TransactionEngine (override val serviceId: String): Community() {
     private val broadcastFanOut = 25
     private val ttl = 100
 
@@ -50,7 +44,7 @@ open class TransactionEngineImpl (override val serviceId: String): TransactionEn
         messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
     }
 
-    override fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean) {
         println("sending block...")
 
         if (peer != null) {
@@ -60,7 +54,7 @@ open class TransactionEngineImpl (override val serviceId: String): TransactionEn
         }
     }
 
-    override fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
+     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
         messageHandlers[onMessageId] = receiver
     }
 
@@ -132,9 +126,9 @@ open class TransactionEngineImpl (override val serviceId: String): TransactionEn
         return msgid.toChar().toByte().toInt()
     }
 
-    class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngineImpl>(TransactionEngineImpl::class.java) {
-        override fun create(): TransactionEngineImpl {
-            return TransactionEngineImpl(serviceId)
+    class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngine>(TransactionEngine::class.java) {
+        override fun create(): TransactionEngine {
+            return TransactionEngine(serviceId)
         }
     }
 }
@@ -295,7 +289,7 @@ open class TransactionEngineBenchmark(
         val random = Random()
         val startTime = System.nanoTime()
 
-        txEngineUnderTest.addReceiver(TransactionEngineImpl.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
+        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
 
         for (i in 0 .. 1000) {
             val message = ByteArray(200)
@@ -321,7 +315,7 @@ open class TransactionEngineBenchmark(
         val random = Random()
         val startTime = System.nanoTime()
 
-        txEngineUnderTest.addReceiver(TransactionEngineImpl.MessageId.HALF_BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
+        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
 
         for (i in 0 .. 1000) {
             val message = ByteArray(200)

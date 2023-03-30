@@ -25,10 +25,10 @@ class DemoTransactionApp {
         startIpv8()
     }
 
-    private fun createCommunity(): OverlayConfiguration<TransactionEngineImpl> {
+    private fun createCommunity(): OverlayConfiguration<TransactionEngine> {
         val randomWalk = RandomWalk.Factory(timeout = 3.0, peers = 20)
         return OverlayConfiguration(
-            TransactionEngineImpl.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
+            TransactionEngine.Factory("c86a7db45eb3563ae047639817baec4db2bc7c25"),
             listOf(randomWalk)
         )
     }
@@ -48,7 +48,7 @@ class DemoTransactionApp {
         val ipv8 = IPv8(endpoint, config, myPeer)
         ipv8.start()
 
-        val community = ipv8.getOverlay<TransactionEngineImpl>()!!
+        val community = ipv8.getOverlay<TransactionEngine>()!!
         val txBenchmark = TransactionEngineBenchmark(community, myPeer)
         val numberOfTransactions = 1
         scope.launch {
