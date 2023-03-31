@@ -21,6 +21,7 @@ import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
 import java.util.function.Consumer
+import kotlin.math.min
 import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
 open class TransactionEngine (override val serviceId: String): Community() {
@@ -44,7 +45,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
     }
 
-    fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer? = null, encrypt: Boolean = false) {
         println("sending block...")
 
         if (peer != null) {
@@ -155,6 +156,7 @@ open class TransactionEngineBenchmark(
     ){
     private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
     private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
+    private val broadcastFanOut = 25
 
     // ======================== BLOCK CREATION METHODS =========================
 
@@ -300,6 +302,32 @@ open class TransactionEngineBenchmark(
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
 
             txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false)
+        }
+        return System.nanoTime() - startTime
+    }
+
+    fun unencryptedRandomSendIPv8Broadcast(key: PrivateKey, context: Context?) : Long {
+        val driver: SqlDriver = if(context!=null) {
+            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        } else {
+            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        }
+
+        val store = TrustChainSQLiteStore(Database(driver))
+        val random = Random()
+        val startTime = System.nanoTime()
+
+        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
+
+        for (i in 0 .. 1000 / min(txEngineUnderTest.getPeers().size, broadcastFanOut)) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), encrypt = false)
         }
         return System.nanoTime() - startTime
     }

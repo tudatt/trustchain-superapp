@@ -63,9 +63,9 @@ class DemoTransactionApp {
                 txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
 
                 // unencrypted Basic block creation with the random content and random addresses
-                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
+                txBenchmark.unencryptedRandomSendIPv8Broadcast(myKey, null)
 
-                // encrypted random blocks
+                // encrypted random content blocks with fixed address
                 txBenchmark.encryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
             }
         }
