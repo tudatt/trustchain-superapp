@@ -281,12 +281,13 @@ open class TransactionEngineBenchmark(
 
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
     fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context?, peer: Peer, timeout: Long) : Pair<Long, Int> {
+        val startTime = System.nanoTime()
         encryptedRandomContentSendIPv8(key,context,peer)
         println("Waiting for $timeout seconds to receive incoming blocks")
         Thread.sleep(timeout*1000) // wait for 10 seconds
         println("Done waiting.")
         val loss = 1000-incomingBlockEchos.size
-        return Pair(incomingBlockEchos.max(),loss)
+        return Pair(incomingBlockEchos.max()-startTime,loss)
     }
 
     //========Message Handlers==========
