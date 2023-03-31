@@ -1,8 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
 import android.content.Context
-import android.provider.ContactsContract.Data
-import androidx.core.content.ContentProviderCompat.requireContext
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
@@ -20,8 +18,8 @@ import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
-import java.util.function.Consumer
-import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
+import kotlin.collections.ArrayList
+import kotlin.math.min
 
 open class TransactionEngine (override val serviceId: String): Community() {
     private val broadcastFanOut = 25
@@ -44,7 +42,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
     }
 
-    fun sendTransaction(block: TrustChainBlock, peer: Peer?, encrypt: Boolean) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer? = null, encrypt: Boolean = false) {
         println("sending block...")
 
         if (peer != null) {
@@ -155,11 +153,12 @@ open class TransactionEngineBenchmark(
 ){
     private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
     private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
+    private val broadcastFanOut = 25
 
     // ======================== BLOCK CREATION METHODS =========================
 
     // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
-    fun unencryptedBasicSameContent() : Long {
+     fun unencryptedBasicSameContent() : Long {
         val type : String = "benchmark"
         val message : ByteArray = "benchmarkMessage".toByteArray()
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
@@ -179,24 +178,18 @@ open class TransactionEngineBenchmark(
 
     // this method can be use to benchmark unencrypted basic block creation with random content and random addresses.
     // We assume 64 byte public key.
-    fun unencryptedBasicRandom() : Long {
+    fun unencryptedBasicRandom(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
         val type : String = "benchmarkRandom"
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
-        val startTime = System.nanoTime()
-
-        val random : Random = Random()
 
         // In order to avoid compiler optimisations, we store the blocks in a list and print the size of that list.
         var blockList : ArrayList<BasicBlock> = ArrayList()
 
+        val startTime = System.nanoTime()
+
         for (i in 0 .. 1000) {
-            var receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
 
-            var message = ByteArray(200)
-            random.nextBytes(message)
-
-            blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+            blockList.add(BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], "".toByteArray()))
         }
 
         println(blockList.size)
@@ -206,22 +199,19 @@ open class TransactionEngineBenchmark(
 
     // This method will be used to benchmark the creation of random blocks with a signature.
 
-    fun unencryptedRandomSigned(key : PrivateKey) : Long {
+     fun unencryptedRandomSigned(key : PrivateKey, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
         val type : String = "benchmarkRandomSigned"
         val senderPublicKey : ByteArray = key.pub().keyToBin()
-        val startTime = System.nanoTime()
 
-        val random : Random = Random()
         val blockList : ArrayList<BasicBlock> = ArrayList()
 
+
+         val startTime = System.nanoTime()
+
         for (i in 0 .. 1000) {
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
 
-            val message = ByteArray(200)
-            random.nextBytes(message)
 
-            val block : BasicBlock = (BasicBlock(type, message, senderPublicKey, receiverPublicKey, ByteArray(0)))
+            val block : BasicBlock = (BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], ByteArray(0)))
             block.sign(key)
             blockList.add(block)
         }
@@ -233,7 +223,7 @@ open class TransactionEngineBenchmark(
 
     // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
     // oposed to the previously used BasicBlocks.
-    fun unencryptedRandomSignedTrustChain(key: PrivateKey) : Long {
+     fun unencryptedRandomSignedTrustChain(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
         val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         Database.Schema.create(driver)
         val store = TrustChainSQLiteStore(Database(driver))
@@ -248,7 +238,7 @@ open class TransactionEngineBenchmark(
             val receiverPublicKey = ByteArray(64)
             random.nextBytes(receiverPublicKey)
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList[i], receiverList[i])
             blockBuilder.sign()
 
         }
@@ -256,20 +246,19 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the creation of signed blocks that are stored in a proper database.
-    fun unencryptedRandomSignedTrustchainPermanentStorage(key: PrivateKey, context: Context) : Long {
+    fun unencryptedRandomSignedTrustchainPermanentStorage(context: Context, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
-        val random = Random()
+
+
         val startTime = System.nanoTime()
 
         for (i in 0 .. 1000) {
-            val message = ByteArray(200)
-            random.nextBytes(message)
 
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                messageList[i], receiverList[i]
+            )
             blockBuilder.sign()
         }
         return System.nanoTime() - startTime
@@ -278,7 +267,7 @@ open class TransactionEngineBenchmark(
     // ============================== BLOCK SENDING METHODS ========================================
 
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    fun unencryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+    fun unencryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer, messageList: ArrayList<ByteArray>) : Long {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -297,15 +286,41 @@ open class TransactionEngineBenchmark(
             val receiverPublicKey = ByteArray(64)
             random.nextBytes(receiverPublicKey)
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList.get(i), key.pub().keyToBin())
 
             txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false)
         }
         return System.nanoTime() - startTime
     }
 
+    fun unencryptedRandomContentSendIPv8Broadcast(key: PrivateKey, context: Context?) : Long {
+        val driver: SqlDriver = if(context!=null) {
+            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        } else {
+            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        }
+
+        val store = TrustChainSQLiteStore(Database(driver))
+        val random = Random()
+        val startTime = System.nanoTime()
+
+        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
+
+        for (i in 0 .. 1000 / min(txEngineUnderTest.getPeers().size, broadcastFanOut)) {
+            val message = ByteArray(200)
+            random.nextBytes(message)
+            val receiverPublicKey = ByteArray(64)
+            random.nextBytes(receiverPublicKey)
+
+            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), encrypt = false)
+        }
+        return System.nanoTime() - startTime
+    }
+
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+    fun encryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -331,30 +346,35 @@ open class TransactionEngineBenchmark(
     // ======================== RECEIVERS ================================
 
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
-//    private fun unencryptedRandomReceiveIPv8() : Long {
-//        val startTime = System.nanoTime()
-//        while (incomingUnencryptedBlocks.size<=1000) {
-//            // wait for all 1000 blocks to be received
-//        }
-//        return System.nanoTime() - startTime
-//    }
-//    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-//    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
-//        val startTime = System.nanoTime()
-//        while (incomingUnencryptedBlocks.size<=1000) {
-//            // wait for all 1000 blocks to be received
-//        }
-//        return System.nanoTime() - startTime
-//    }
+    private fun unencryptedRandomReceiveIPv8() : Long {
+        val startTime = System.nanoTime()
+        while (incomingUnencryptedBlocks.size<=1000) {
+            // wait for all 1000 blocks to be received
+        }
+        return System.nanoTime() - startTime
+    }
+    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
+    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
+        val startTime = System.nanoTime()
+        println(key)
+        println(context.toString())
+        println(peer.key)
+        while (incomingUnencryptedBlocks.size<=1000) {
+            // wait for all 1000 blocks to be received
+        }
+        return System.nanoTime() - startTime
+    }
 
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
     private fun onUnencryptedRandomIPv8Packet(packet: Packet) {
         val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        println("received")
         incomingUnencryptedBlocks.add(payload)
     }
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
     private fun onEncryptedRandomIPv8Packet(packet: Packet) {
         val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        println("received")
         incomingEncryptedBlocks.add(payload)
     }
 

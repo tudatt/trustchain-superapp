@@ -133,7 +133,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {
-            showBenchmarkDialog()
+            showBenchmarkDialog(peers)
         }
 
         val benchmarkTextView = benchmarkStatusTextView
@@ -251,7 +251,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         })
     }
 
-    private fun showBenchmarkDialog() {
+    private fun showBenchmarkDialog(peers: ArrayList<PeerViewModel>) {
         val builder = AlertDialog.Builder(requireContext()).create()
         val view = layoutInflater.inflate(R.layout.benchmark_dialog_layout, null)
         val button1 = view.findViewById<Button>(R.id.benchmarkButton1)
@@ -264,6 +264,21 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         val resultTextView = view.findViewById<TextView>(R.id.resultTimeTextView)
 
+        val random : Random = Random()
+
+
+        var receiverList : ArrayList<ByteArray> = ArrayList()
+        var messageList : ArrayList<ByteArray> = ArrayList()
+        for (i in 0 .. 1000) {
+            var receiverArray : ByteArray = ByteArray(64)
+            random.nextBytes(receiverArray)
+            receiverList.add(receiverArray)
+
+            var messageArray = ByteArray(200)
+            random.nextBytes(messageArray)
+            messageList.add(messageArray)
+        }
+
         builder.setView(view)
         val engine = TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25")
         val engineBenchmark = TransactionEngineBenchmark(engine, Peer(getPrivateKey(requireContext())) )
@@ -274,27 +289,30 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         }
 
         button2.setOnClickListener {
-            val result = engineBenchmark.unencryptedBasicRandom()
+            val result = engineBenchmark.unencryptedBasicRandom(receiverList, messageList)
             resultTextView.text = result.toString()
         }
 
         button3.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSigned(getPrivateKey(requireContext()))
+            val result = engineBenchmark.unencryptedRandomSigned(getPrivateKey(requireContext()), receiverList, messageList)
             resultTextView.text = result.toString()
         }
 
         button4.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSignedTrustChain(getPrivateKey(requireContext()))
+            val result = engineBenchmark.unencryptedRandomSignedTrustChain(receiverList, messageList)
             resultTextView.text = result.toString()
         }
 
         button5.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(getPrivateKey(requireContext()), requireContext())
+            val result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(requireContext(), receiverList, messageList)
             resultTextView.text = result.toString()
         }
 
         button6.setOnClickListener {
-            println("Please implement me")
+            if (peers.size > 0) {
+                val result = engineBenchmark.unencryptedRandomContentSendIPv8(getPrivateKey(requireContext()), requireContext(), peers.get(0).peer, messageList)
+                resultTextView.text = result.toString()
+            }
         }
         builder.setCanceledOnTouchOutside(true)
         builder.show()
