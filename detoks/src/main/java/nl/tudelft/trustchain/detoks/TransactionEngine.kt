@@ -15,6 +15,7 @@ import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.PrivateKey
 import nl.tudelft.ipv8.messaging.Packet
+import nl.tudelft.ipv8.messaging.payload.IntroductionRequestPayload
 import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
@@ -22,71 +23,26 @@ import kotlin.collections.ArrayList
 import kotlin.math.min
 
 open class TransactionEngine (override val serviceId: String): Community() {
-    private val broadcastFanOut = 25
-    private val ttl = 100
 
-    object MessageId {
-        const val HALF_BLOCK = 4242
-        const val HALF_BLOCK_ENCRYPTED = 4243
-        const val HALF_BLOCK_BROADCAST = 424242
-        const val HALF_BLOCK_BROADCAST_ENCRYPTED = 424243
-        const val BLOCK_UNENCRYPTED = 35007
-        const val BLOCK_ENCRYPTED = 350072
-
-    }
-
-    init {
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK)] = ::onHalfBlockPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST)] = ::onHalfBlockBroadcastPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_ENCRYPTED)] = ::onHalfBlockPacket
-        messageHandlers[msgIdFixer(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED)] = ::onHalfBlockBroadcastPacket
-    }
-
-    fun sendTransaction(block: TrustChainBlock, peer: Peer? = null, encrypt: Boolean = false) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int) {
         println("sending block...")
-
-        if (peer != null) {
-            sendBlockToRecipient(peer, block, encrypt)
-        } else {
-            sendBlockBroadcast(block, encrypt)
-        }
+        sendBlockToRecipient(peer, block, encrypt,msgID)
     }
 
     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
-        messageHandlers[onMessageId] = receiver
+        messageHandlers[msgIdFixer(onMessageId)] = receiver
     }
 
-    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean) {
+    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int) {
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
-            serializePacket(MessageId.HALF_BLOCK_ENCRYPTED, payload, false, encrypt = true, recipient = peer)
+            serializePacket(msgID, payload, false, encrypt = true, recipient = peer)
         } else {
-            serializePacket(MessageId.HALF_BLOCK, payload, false)
+            serializePacket(msgID, payload, false)
         }
 
         send(peer, data)
-    }
-
-    private fun sendBlockBroadcast(block: TrustChainBlock, encrypt: Boolean) {
-        val payload = HalfBlockBroadcastPayload.fromHalfBlock(block, ttl.toUInt())
-        val randomPeers = getPeers().random(broadcastFanOut)
-        for (randomPeer in randomPeers) {
-            val data = if (encrypt) {
-                serializePacket(MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED, payload, false, encrypt = true, recipient = randomPeer)
-            } else {
-                serializePacket(MessageId.HALF_BLOCK_BROADCAST, payload, false)
-            }
-            send(randomPeer, data)
-        }
-    }
-
-    private fun onHalfBlockPacket(packet: Packet) {
-        println("half block packet received from: " + packet.source.toString())
-    }
-
-    private fun onHalfBlockBroadcastPacket(packet: Packet) {
-        println("half block packet received from broadcast from: " + packet.source.toString())
     }
 
     override fun onPacket(packet: Packet) {
@@ -151,10 +107,19 @@ open class TransactionEngineBenchmark(
     private val txEngineUnderTest: TransactionEngine,
     private val myPeer: Peer
 ){
-    private val incomingUnencryptedBlocks = mutableListOf<HalfBlockPayload>()
-    private val incomingEncryptedBlocks = mutableListOf<HalfBlockPayload>()
-    private val broadcastFanOut = 25
+    object MessageId {
+        const val BLOCK_UNENCRYPTED = 35007
+        const val BLOCK_ENCRYPTED = 350072
+        const val BLOCK_ENCRYPTED_ECHO = 3500721
+    }
 
+
+    private val incomingBlockEchos = mutableListOf<Long>()
+
+    init{
+        txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
+        txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED_ECHO, ::onEncryptedEchoPacket)
+    }
     // ======================== BLOCK CREATION METHODS =========================
 
     // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
@@ -222,7 +187,7 @@ open class TransactionEngineBenchmark(
     }
 
     // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
-    // oposed to the previously used BasicBlocks.
+    // opposed to the previously used BasicBlocks.
      fun unencryptedRandomSignedTrustChain(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
         val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         Database.Schema.create(driver)
@@ -278,7 +243,6 @@ open class TransactionEngineBenchmark(
         val random = Random()
         val startTime = System.nanoTime()
 
-        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
 
         for (i in 0 .. 1000) {
             val message = ByteArray(200)
@@ -288,33 +252,7 @@ open class TransactionEngineBenchmark(
 
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList.get(i), key.pub().keyToBin())
 
-            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false)
-        }
-        return System.nanoTime() - startTime
-    }
-
-    fun unencryptedRandomContentSendIPv8Broadcast(key: PrivateKey, context: Context?) : Long {
-        val driver: SqlDriver = if(context!=null) {
-            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
-        } else {
-            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        }
-
-        val store = TrustChainSQLiteStore(Database(driver))
-        val random = Random()
-        val startTime = System.nanoTime()
-
-        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK, ::onUnencryptedRandomIPv8Packet)
-
-        for (i in 0 .. 1000 / min(txEngineUnderTest.getPeers().size, broadcastFanOut)) {
-            val message = ByteArray(200)
-            random.nextBytes(message)
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
-
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
-
-            txEngineUnderTest.sendTransaction(blockBuilder.sign(), encrypt = false)
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
         }
         return System.nanoTime() - startTime
     }
@@ -330,52 +268,42 @@ open class TransactionEngineBenchmark(
         val random = Random()
         val startTime = System.nanoTime()
 
-        txEngineUnderTest.addReceiver(TransactionEngine.MessageId.HALF_BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
-
         for (i in 0 .. 1000) {
             val message = ByteArray(200)
             random.nextBytes(message)
 
             val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
 
-            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true)
+            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
         }
         return System.nanoTime() - startTime
     }
 
-    // ======================== RECEIVERS ================================
-
-    // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
-    private fun unencryptedRandomReceiveIPv8() : Long {
-        val startTime = System.nanoTime()
-        while (incomingUnencryptedBlocks.size<=1000) {
-            // wait for all 1000 blocks to be received
-        }
-        return System.nanoTime() - startTime
-    }
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-    private fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context, peer: Peer) : Long {
-        val startTime = System.nanoTime()
-        println(key)
-        println(context.toString())
-        println(peer.key)
-        while (incomingUnencryptedBlocks.size<=1000) {
-            // wait for all 1000 blocks to be received
-        }
-        return System.nanoTime() - startTime
+    fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context?, peer: Peer, timeout: Long) : Pair<Long, Int> {
+        encryptedRandomContentSendIPv8(key,context,peer)
+        println("Waiting for $timeout seconds to receive incoming blocks")
+        Thread.sleep(timeout*1000) // wait for 10 seconds
+        println("Done waiting.")
+        val loss = 1000-incomingBlockEchos.size
+        return Pair(incomingBlockEchos.max(),loss)
     }
 
-    // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
-    private fun onUnencryptedRandomIPv8Packet(packet: Packet) {
-        val payload = packet.getPayload(HalfBlockPayload.Deserializer)
-        println("received")
-        incomingUnencryptedBlocks.add(payload)
-    }
-    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
+    //========Message Handlers==========
+    // This method is used to track incoming encrypted blocks and echo then with a new timestamp
     private fun onEncryptedRandomIPv8Packet(packet: Packet) {
-        val payload = packet.getPayload(HalfBlockPayload.Deserializer)
-        println("received")
-        incomingEncryptedBlocks.add(payload)
-    }
+        val incomingTime = System.nanoTime()
+        val (peer, payload) = packet.getAuthPayload(HalfBlockPayload.Deserializer)
 
+        val echoPayload = HalfBlockPayload(payload.publicKey,payload.sequenceNumber,payload.linkPublicKey,payload.linkSequenceNumber,payload.previousHash,payload.signature,payload.blockType,payload.transaction,
+            incomingTime.toULong()
+        )
+        println("received")
+        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO)
+    }
+    // This method is used to track incoming encrypted block echos and store them for benchmarking
+    private fun onEncryptedEchoPacket(packet: Packet) {
+        val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        incomingBlockEchos.add(payload.timestamp.toLong())
+    }
 }
