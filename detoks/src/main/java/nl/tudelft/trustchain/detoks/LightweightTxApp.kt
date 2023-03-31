@@ -1,19 +1,14 @@
 package nl.tudelft.trustchain.detoks
 
-import com.squareup.sqldelight.db.SqlDriver
-import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.tudelft.ipv8.*
-import nl.tudelft.ipv8.attestation.trustchain.ProposalBlockBuilder
-import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.JavaCryptoProvider
 import nl.tudelft.ipv8.messaging.EndpointAggregator
 import nl.tudelft.ipv8.messaging.udp.UdpEndpoint
 import nl.tudelft.ipv8.peerdiscovery.strategy.RandomWalk
-import nl.tudelft.ipv8.sqldelight.Database
 import java.net.InetAddress
 import java.util.*
 import kotlin.math.roundToInt
@@ -60,13 +55,13 @@ class DemoTransactionApp {
 
 
                 // unencrypted Basic block creation with the same content and the same addresses
-                txBenchmark.unencryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
+                txBenchmark.unencryptedRandomContentSendIPv8(myKey, null, community.getPeers()[0])
 
                 // unencrypted Basic block creation with the random content and random addresses
-                txBenchmark.unencryptedRandomSendIPv8Broadcast(myKey, null)
+                txBenchmark.unencryptedRandomContentSendIPv8Broadcast(myKey, null)
 
                 // encrypted random content blocks with fixed address
-                txBenchmark.encryptedRandomSendIPv8(myKey, null, community.getPeers()[0])
+                txBenchmark.encryptedRandomContentSendIPv8(myKey, null, community.getPeers()[0])
             }
         }
 

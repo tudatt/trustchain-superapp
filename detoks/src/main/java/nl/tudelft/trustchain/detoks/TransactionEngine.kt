@@ -1,8 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
 import android.content.Context
-import android.provider.ContactsContract.Data
-import androidx.core.content.ContentProviderCompat.requireContext
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
@@ -20,9 +18,7 @@ import nl.tudelft.ipv8.messaging.Packet
 import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.random
 import java.util.*
-import java.util.function.Consumer
 import kotlin.math.min
-import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
 open class TransactionEngine (override val serviceId: String): Community() {
     private val broadcastFanOut = 25
@@ -280,7 +276,7 @@ open class TransactionEngineBenchmark(
     // ============================== BLOCK SENDING METHODS ========================================
 
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    fun unencryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+    fun unencryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -306,7 +302,7 @@ open class TransactionEngineBenchmark(
         return System.nanoTime() - startTime
     }
 
-    fun unencryptedRandomSendIPv8Broadcast(key: PrivateKey, context: Context?) : Long {
+    fun unencryptedRandomContentSendIPv8Broadcast(key: PrivateKey, context: Context?) : Long {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -333,7 +329,7 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+    fun encryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -378,11 +374,13 @@ open class TransactionEngineBenchmark(
     // This method can be used to benchmark the receiving of signed unencrypted blocks over ipv8
     private fun onUnencryptedRandomIPv8Packet(packet: Packet) {
         val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        println("received")
         incomingUnencryptedBlocks.add(payload)
     }
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
     private fun onEncryptedRandomIPv8Packet(packet: Packet) {
         val payload = packet.getPayload(HalfBlockPayload.Deserializer)
+        println("received")
         incomingEncryptedBlocks.add(payload)
     }
 
