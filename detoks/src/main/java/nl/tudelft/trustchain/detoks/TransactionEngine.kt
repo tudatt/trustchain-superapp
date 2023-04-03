@@ -21,6 +21,7 @@ import nl.tudelft.ipv8.util.random
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.min
+import com.github.mikephil.charting.data.Entry
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
@@ -123,7 +124,8 @@ open class TransactionEngineBenchmark(
     // ======================== BLOCK CREATION METHODS =========================
 
     // this method can be used to benchmark unencrypted Basic block creation with the same content and the same addresses
-     fun unencryptedBasicSameContent() : Long {
+     fun unencryptedBasicSameContent(graphResolution : Int, numberOfBlocks : Int, time : Boolean) : BenchmarkResult{
+        val timePerBlock : ArrayList<Entry> = ArrayList()
         val type : String = "benchmark"
         val message : ByteArray = "benchmarkMessage".toByteArray()
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
@@ -132,13 +134,40 @@ open class TransactionEngineBenchmark(
 
         var blockList : ArrayList<BasicBlock> = ArrayList()
 
-        for (i in 0..1000) {
-            blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+        if (time) {
+            var counter = 0
+            var previous : Long = 0
+            while (System.nanoTime() < (startTime) + numberOfBlocks * 1000000000) {
+                blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+                counter++
+                if (counter % graphResolution == 0) {
+                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+//                    println("added " + ((System.nanoTime().toFloat() - previous) / graphResolution.toFloat())/1000000000f)
+                    previous = System.nanoTime()
+                }
+            }
+
+            val totalTime : Long = System.nanoTime() - startTime
+            val payloadBandwith : Double = (message.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+
+        } else {
+            var previous : Long = System.nanoTime()
+            for (i in 0..numberOfBlocks) {
+                blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
+                println("index: " + i.toString() + " resolution " + graphResolution.toString() + " modulo " + (i % graphResolution))
+                if (i % graphResolution == 0) {
+                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    println("nanotime " + System.nanoTime() + " previous " + previous + " divided " + (System.nanoTime() - previous) / graphResolution.toFloat())
+                    previous = System.nanoTime()
+
+                }
+            }
+            val totalTime : Long = System.nanoTime() - startTime
+
+            val payloadBandwith : Double = (message.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
         }
-
-        println(blockList.size)
-
-        return System.nanoTime() - startTime
     }
 
     // this method can be use to benchmark unencrypted basic block creation with random content and random addresses.
@@ -233,6 +262,7 @@ open class TransactionEngineBenchmark(
 
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
     fun unencryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer, messageList: ArrayList<ByteArray>) : Long {
+        incomingBlockEchos.clear()
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -259,6 +289,7 @@ open class TransactionEngineBenchmark(
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
     fun encryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
+        incomingBlockEchos.clear()
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {

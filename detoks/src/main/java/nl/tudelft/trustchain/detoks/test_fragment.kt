@@ -7,11 +7,15 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.PopupWindow
-import android.widget.TextView
+import android.widget.*
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.github.mikephil.charting.animation.Easing
+import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.data.Entry
+import com.github.mikephil.charting.data.LineData
+import com.github.mikephil.charting.data.LineDataSet
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
@@ -32,6 +36,8 @@ import nl.tudelft.ipv8.sqldelight.Database
 import nl.tudelft.ipv8.util.hexToBytes
 import nl.tudelft.ipv8.util.toHex
 import nl.tudelft.trustchain.common.ui.BaseFragment
+import java.math.RoundingMode
+import java.text.DecimalFormat
 import java.util.*
 
 private const val PREF_PRIVATE_KEY = "private_key"
@@ -279,13 +285,86 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             messageList.add(messageArray)
         }
 
+        val benchmarkResultView = layoutInflater.inflate(R.layout.benchmark_results_noipv8, null)
+
         builder.setView(view)
         val engine = TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25")
         val engineBenchmark = TransactionEngineBenchmark(engine, Peer(getPrivateKey(requireContext())) )
 
         button1.setOnClickListener {
-            val result = engineBenchmark.unencryptedBasicSameContent()
-            resultTextView.text = result.toString()
+            builder.setContentView(benchmarkResultView)
+            builder.show()
+            val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(R.id.benchmarkTypeTextView)
+            benchmarkTypeTextView.text = "unencrypted same content"
+            val durationCountEditText = benchmarkResultView.findViewById<EditText>(R.id.benchmarkCountDurationEditText)
+
+            val timeRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.timeRadioButton)
+            val blocksRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.blocksRadioButton)
+
+            blocksRadioButton.isChecked = true
+            val graphResolutionEditText = benchmarkResultView.findViewById<EditText>(R.id.graphResolutionEditText)
+//            graphResolutionEditText.setFocusable(true)
+//            graphResolutionEditText.setFocusableInTouchMode(true)
+            val runBenchmarkButton = benchmarkResultView.findViewById<Button>(R.id.runBenchmarkButton)
+
+            val totalTimeTextView = benchmarkResultView.findViewById<TextView>(R.id.totalTimeValueTextView)
+            val bandwithTextView = benchmarkResultView.findViewById<TextView>(R.id.bandwithValueTextView)
+
+            val constraintLayout = benchmarkResultView.findViewById<ConstraintLayout>(R.id.resultConstraintLayout)
+
+            constraintLayout.post(Runnable {
+                builder.window?.clearFlags(
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+                )
+            })
+
+            val lineChart = benchmarkResultView.findViewById<LineChart>(R.id.benchmarkLineChart)
+            lineChart.setTouchEnabled(true)
+            lineChart.setPinchZoom(true)
+
+            lineChart.description.text = "Days"
+            lineChart.setNoDataText("No forex yet!")
+
+            runBenchmarkButton.setOnClickListener {
+                var resolution = graphResolutionEditText.text.toString()
+                if (resolution == "") {
+                    resolution = "10"
+                }
+
+                var blocksOrTime = durationCountEditText.text.toString()
+                if (blocksOrTime == "") {
+                    blocksOrTime = if (timeRadioButton.isChecked) {
+                        "1"
+                    } else {
+                        "1000"
+                    }
+                }
+
+                val result = engineBenchmark.unencryptedBasicSameContent(
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
+
+                val df = DecimalFormat("#.##")
+                df.roundingMode = RoundingMode.DOWN
+                val roundoff = df.format(result.payloadBandwith)
+                totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
+                bandwithTextView.text = roundoff
+
+                val dataset = LineDataSet(result.timePerBlock, "time per block")
+                dataset.setDrawValues(false)
+                dataset.lineWidth = 3f
+                lineChart.data = LineData(dataset)
+
+                lineChart.animateX(1800, Easing.EaseInExpo)
+
+            }
+
+
+//            val result = engineBenchmark.unencryptedBasicSameContent()
+//            resultTextView.text = result.toString()
         }
 
         button2.setOnClickListener {

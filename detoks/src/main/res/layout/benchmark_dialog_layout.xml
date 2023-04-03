@@ -33,74 +33,54 @@
                 android:layout_weight="1" />
         </LinearLayout>
 
-        <LinearLayout
+        <Button
+            android:id="@+id/benchmarkButton1"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_margin="5dp"
-            android:orientation="horizontal">
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="unencrypted same content" />
 
-            <Button
-                android:id="@+id/benchmarkButton1"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="unencrypted same content" />
-
-            <Button
-                android:id="@+id/benchmarkButton2"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="unencrypted random" />
-        </LinearLayout>
-
-        <LinearLayout
+        <Button
+            android:id="@+id/benchmarkButton2"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_margin="5dp"
-            android:orientation="horizontal">
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="unencrypted random" />
 
-            <Button
-                android:id="@+id/benchmarkButton3"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="random signed" />
-
-            <Button
-                android:id="@+id/benchmarkButton4"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="random signed TrustChain" />
-        </LinearLayout>
-
-        <LinearLayout
+        <Button
+            android:id="@+id/benchmarkButton3"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_margin="5dp"
-            android:orientation="horizontal">
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="random signed" />
 
-            <Button
-                android:id="@+id/benchMarkButton5"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Random signed trustchain permament" />
+        <Button
+            android:id="@+id/benchmarkButton4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="random signed TrustChain" />
 
-            <Button
-                android:id="@+id/benchmarkButton6"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="unencrypted random IPv8" />
-        </LinearLayout>
+        <Button
+            android:id="@+id/benchMarkButton5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Random signed trustchain permament" />
+
+        <Button
+            android:id="@+id/benchmarkButton6"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="unencrypted random IPv8" />
 
         <Button
             android:id="@+id/benchmarkButton7"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="encrypted random ipv8" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
