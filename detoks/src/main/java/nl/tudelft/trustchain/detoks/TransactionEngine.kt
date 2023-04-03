@@ -170,7 +170,7 @@ open class TransactionEngineBenchmark(
 
     // this method can be use to benchmark unencrypted basic block creation with random content and random addresses.
     // We assume 64 byte public key.
-    fun unencryptedBasicRandom(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
+    fun unencryptedBasicRandom(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val type : String = "benchmarkRandom"
         val senderPublicKey : ByteArray = "fakeKey".toByteArray()
 
@@ -178,82 +178,164 @@ open class TransactionEngineBenchmark(
         var blockList : ArrayList<BasicBlock> = ArrayList()
 
         val startTime = System.nanoTime()
+        val timePerBlock : ArrayList<Entry> = ArrayList()
 
-        for (i in 0 .. 1000) {
+        if (time) {
+            var counter = 0
+            var previous : Long = System.nanoTime()
+            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
+                blockList.add(BasicBlock(type, messageList[counter%messageList.size], senderPublicKey, receiverList[counter%receiverList.size], "".toByteArray()))
+                counter++
+                if (counter % graphResolution == 0) {
+                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+                }
+            }
 
-            blockList.add(BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], "".toByteArray()))
+            val totalTime : Long = System.nanoTime() - startTime
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+
+        } else {
+            var previous : Long = System.nanoTime()
+            for (i in 0..numberOfBlocks) {
+                blockList.add(BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], "".toByteArray()))
+                println("index: " + i.toString() + " resolution " + graphResolution.toString() + " modulo " + (i % graphResolution))
+                if (i % graphResolution == 0) {
+                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+
+                }
+            }
+            val totalTime : Long = System.nanoTime() - startTime
+
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
         }
-
-        println(blockList.size)
-
-        return System.nanoTime() - startTime
     }
 
     // This method will be used to benchmark the creation of random blocks with a signature.
 
-     fun unencryptedRandomSigned(key : PrivateKey, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
+     fun unencryptedRandomSigned(key : PrivateKey, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val type : String = "benchmarkRandomSigned"
         val senderPublicKey : ByteArray = key.pub().keyToBin()
 
-        val blockList : ArrayList<BasicBlock> = ArrayList()
+//        val blockList : ArrayList<BasicBlock> = ArrayList()
 
 
          val startTime = System.nanoTime()
 
-        for (i in 0 .. 1000) {
+         val timePerBlock : ArrayList<Entry> = ArrayList()
 
+         if (time) {
+             var counter = 0
+             var previous : Long = System.nanoTime()
+             while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
+                 val block: BasicBlock = BasicBlock(type, messageList[counter%messageList.size], senderPublicKey, receiverList[counter%receiverList.size], "".toByteArray())
+                 block.sign(key)
+                 counter++
+                 if (counter % graphResolution == 0) {
+                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                     previous = System.nanoTime()
+                 }
+             }
 
-            val block : BasicBlock = (BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], ByteArray(0)))
-            block.sign(key)
-            blockList.add(block)
-        }
+             val totalTime : Long = System.nanoTime() - startTime
+             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
 
-        println(blockList.size)
+         } else {
+             var previous : Long = System.nanoTime()
+             for (i in 0..numberOfBlocks) {
+                 val block: BasicBlock = BasicBlock(type, messageList[i], senderPublicKey, receiverList[i], "".toByteArray())
+                 block.sign(key)
+                 if (i % graphResolution == 0) {
+                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                     previous = System.nanoTime()
 
-        return System.nanoTime() - startTime
+                 }
+             }
+             val totalTime : Long = System.nanoTime() - startTime
+
+             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+         }
+
     }
 
     // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
     // opposed to the previously used BasicBlocks.
-     fun unencryptedRandomSignedTrustChain(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
-        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        Database.Schema.create(driver)
-        val store = TrustChainSQLiteStore(Database(driver))
-
-        val random = Random()
-        val startTime = System.nanoTime()
-
-        for (i in 0 .. 1000) {
-            val message = ByteArray(200)
-            random.nextBytes(message)
-
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
-
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList[i], receiverList[i])
-            blockBuilder.sign()
-
-        }
-        return System.nanoTime() - startTime
-    }
+//     fun unencryptedRandomSignedTrustChain(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+//        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+//        Database.Schema.create(driver)
+//        val store = TrustChainSQLiteStore(Database(driver))
+//
+//        val random = Random()
+//        val startTime = System.nanoTime()
+//
+//        for (i in 0 .. 1000) {
+//            val message = ByteArray(200)
+//            random.nextBytes(message)
+//
+//            val receiverPublicKey = ByteArray(64)
+//            random.nextBytes(receiverPublicKey)
+//
+//            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList[i], receiverList[i])
+//            blockBuilder.sign()
+//
+//        }
+//    }
 
     // This method can be used to benchmark the creation of signed blocks that are stored in a proper database.
-    fun unencryptedRandomSignedTrustchainPermanentStorage(context: Context, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>) : Long {
+    fun unencryptedRandomSignedTrustchainPermanentStorage(context: Context, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
 
 
         val startTime = System.nanoTime()
 
-        for (i in 0 .. 1000) {
+        val timePerBlock : ArrayList<Entry> = ArrayList()
 
+        if (time) {
+            var counter = 0
+            var previous : Long = System.nanoTime()
+            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
-                messageList[i], receiverList[i]
-            )
-            blockBuilder.sign()
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[counter%messageList.size], receiverList[counter%receiverList.size]
+                )
+                blockBuilder.sign()
+
+                counter++
+                if (counter % graphResolution == 0) {
+                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+                }
+            }
+
+            val totalTime : Long = System.nanoTime() - startTime
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+
+        } else {
+            var previous : Long = System.nanoTime()
+            for (i in 0..numberOfBlocks) {
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[i], receiverList[i]
+                )
+                blockBuilder.sign()
+
+                if (i % graphResolution == 0) {
+                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+
+                }
+            }
+            val totalTime : Long = System.nanoTime() - startTime
+
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
         }
-        return System.nanoTime() - startTime
     }
 
     // ============================== BLOCK SENDING METHODS ========================================

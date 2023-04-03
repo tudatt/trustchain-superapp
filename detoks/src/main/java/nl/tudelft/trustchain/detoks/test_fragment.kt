@@ -257,6 +257,205 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         })
     }
 
+    private fun specificBenchmark(builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark) {
+        builder.setContentView(benchmarkResultView)
+        builder.show()
+        val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(R.id.benchmarkTypeTextView)
+        benchmarkTypeTextView.text = "unencrypted same content"
+        val durationCountEditText = benchmarkResultView.findViewById<EditText>(R.id.benchmarkCountDurationEditText)
+
+        val timeRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.timeRadioButton)
+        val blocksRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.blocksRadioButton)
+
+        blocksRadioButton.isChecked = true
+        val graphResolutionEditText = benchmarkResultView.findViewById<EditText>(R.id.graphResolutionEditText)
+//            graphResolutionEditText.setFocusable(true)
+//            graphResolutionEditText.setFocusableInTouchMode(true)
+        val runBenchmarkButton = benchmarkResultView.findViewById<Button>(R.id.runBenchmarkButton)
+
+        val totalTimeTextView = benchmarkResultView.findViewById<TextView>(R.id.totalTimeValueTextView)
+        val bandwithTextView = benchmarkResultView.findViewById<TextView>(R.id.bandwithValueTextView)
+
+        val constraintLayout = benchmarkResultView.findViewById<ConstraintLayout>(R.id.resultConstraintLayout)
+
+        constraintLayout.post(Runnable {
+            builder.window?.clearFlags(
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            )
+        })
+
+        val lineChart = benchmarkResultView.findViewById<LineChart>(R.id.benchmarkLineChart)
+        lineChart.setTouchEnabled(true)
+        lineChart.setPinchZoom(true)
+
+        lineChart.description.text = "Days"
+        lineChart.setNoDataText("No forex yet!")
+
+        runBenchmarkButton.setOnClickListener {
+            var resolution = graphResolutionEditText.text.toString()
+            if (resolution == "") {
+                resolution = "10"
+            }
+
+            var blocksOrTime = durationCountEditText.text.toString()
+            if (blocksOrTime == "") {
+                blocksOrTime = if (timeRadioButton.isChecked) {
+                    "1"
+                } else {
+                    "1000"
+                }
+            }
+
+            val result = engineBenchmark.unencryptedBasicSameContent(
+                Integer.parseInt(resolution),
+                Integer.parseInt(blocksOrTime),
+                timeRadioButton.isChecked
+            )
+
+            val df = DecimalFormat("#.##")
+            df.roundingMode = RoundingMode.DOWN
+            val roundoff = df.format(result.payloadBandwith)
+            totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
+            bandwithTextView.text = roundoff
+
+            val dataset = LineDataSet(result.timePerBlock, "time per block")
+            dataset.setDrawValues(false)
+            dataset.lineWidth = 3f
+            lineChart.data = LineData(dataset)
+
+            lineChart.animateX(1800, Easing.EaseInExpo)
+
+        }
+    }
+
+    private fun runSpecificRandomBenchmark(builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark, type: String) {
+        builder.setContentView(benchmarkResultView)
+        builder.show()
+        val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(R.id.benchmarkTypeTextView)
+        benchmarkTypeTextView.text = "unencrypted same content"
+        val durationCountEditText = benchmarkResultView.findViewById<EditText>(R.id.benchmarkCountDurationEditText)
+
+        val timeRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.timeRadioButton)
+        val blocksRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.blocksRadioButton)
+
+        blocksRadioButton.isChecked = true
+        val graphResolutionEditText = benchmarkResultView.findViewById<EditText>(R.id.graphResolutionEditText)
+//            graphResolutionEditText.setFocusable(true)
+//            graphResolutionEditText.setFocusableInTouchMode(true)
+        val runBenchmarkButton = benchmarkResultView.findViewById<Button>(R.id.runBenchmarkButton)
+
+        val totalTimeTextView = benchmarkResultView.findViewById<TextView>(R.id.totalTimeValueTextView)
+        val bandwithTextView = benchmarkResultView.findViewById<TextView>(R.id.bandwithValueTextView)
+
+        val constraintLayout = benchmarkResultView.findViewById<ConstraintLayout>(R.id.resultConstraintLayout)
+
+        constraintLayout.post(Runnable {
+            builder.window?.clearFlags(
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            )
+        })
+
+        val lineChart = benchmarkResultView.findViewById<LineChart>(R.id.benchmarkLineChart)
+        lineChart.setTouchEnabled(true)
+        lineChart.setPinchZoom(true)
+
+        lineChart.description.text = "Days"
+        lineChart.setNoDataText("No forex yet!")
+
+        runBenchmarkButton.setOnClickListener {
+            var resolution = graphResolutionEditText.text.toString()
+            if (resolution == "") {
+                resolution = "10"
+            }
+
+            var blocksOrTime = durationCountEditText.text.toString()
+            if (blocksOrTime == "") {
+                blocksOrTime = if (timeRadioButton.isChecked) {
+                    "1"
+                } else {
+                    "1000"
+                }
+            }
+
+            val random : Random = Random()
+
+
+            val receiverList : ArrayList<ByteArray> = ArrayList()
+            val messageList : ArrayList<ByteArray> = ArrayList()
+            // generate messages and recipients
+            if (blocksRadioButton.isChecked) {
+
+                for (i in 0 .. Integer.parseInt(durationCountEditText.text.toString())) {
+                    var receiverArray : ByteArray = ByteArray(64)
+                    random.nextBytes(receiverArray)
+                    receiverList.add(receiverArray)
+
+                    var messageArray = ByteArray(200)
+                    random.nextBytes(messageArray)
+                    messageList.add(messageArray)
+                }
+            } else {
+                for (i in 0 .. 1000) {
+                    var receiverArray : ByteArray = ByteArray(64)
+                    random.nextBytes(receiverArray)
+                    receiverList.add(receiverArray)
+
+                    var messageArray = ByteArray(200)
+                    random.nextBytes(messageArray)
+                    messageList.add(messageArray)
+                }
+            }
+
+            val result : BenchmarkResult
+
+
+            when (type) {
+                "unencryptedBasicRandom" -> result = engineBenchmark.unencryptedBasicRandom(
+                    receiverList,
+                    messageList,
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked)
+                "unencryptedBasicRandomSigned" -> result = engineBenchmark.unencryptedRandomSigned(
+                    getPrivateKey(requireContext()),
+                    receiverList,
+                    messageList,
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
+                else -> {
+                    result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
+                        requireContext(),
+                        receiverList,
+                        messageList,
+                        Integer.parseInt(resolution),
+                        Integer.parseInt(blocksOrTime),
+                        timeRadioButton.isChecked
+                    )
+                }
+            }
+
+
+
+            val df = DecimalFormat("#.##")
+            df.roundingMode = RoundingMode.DOWN
+            val roundoff = df.format(result.payloadBandwith)
+            totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
+            bandwithTextView.text = roundoff
+
+            val dataset = LineDataSet(result.timePerBlock, "time per block")
+            dataset.setDrawValues(false)
+            dataset.lineWidth = 3f
+            lineChart.data = LineData(dataset)
+
+            lineChart.animateX(1800, Easing.EaseInExpo)
+
+        }
+    }
+
     private fun showBenchmarkDialog(peers: ArrayList<PeerViewModel>) {
         val builder = AlertDialog.Builder(requireContext()).create()
         val view = layoutInflater.inflate(R.layout.benchmark_dialog_layout, null)
@@ -268,22 +467,11 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         val button6 = view.findViewById<Button>(R.id.benchmarkButton6)
 //        val button7 = view.findViewById<Button>(R.id.benchmarkButton7)
 
-        val resultTextView = view.findViewById<TextView>(R.id.resultTimeTextView)
-
-        val random : Random = Random()
+//        val resultTextView = view.findViewById<TextView>(R.id.resultTimeTextView)
 
 
-        var receiverList : ArrayList<ByteArray> = ArrayList()
-        var messageList : ArrayList<ByteArray> = ArrayList()
-        for (i in 0 .. 1000) {
-            var receiverArray : ByteArray = ByteArray(64)
-            random.nextBytes(receiverArray)
-            receiverList.add(receiverArray)
 
-            var messageArray = ByteArray(200)
-            random.nextBytes(messageArray)
-            messageList.add(messageArray)
-        }
+
 
         val benchmarkResultView = layoutInflater.inflate(R.layout.benchmark_results_noipv8, null)
 
@@ -292,105 +480,30 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         val engineBenchmark = TransactionEngineBenchmark(engine, Peer(getPrivateKey(requireContext())) )
 
         button1.setOnClickListener {
-            builder.setContentView(benchmarkResultView)
-            builder.show()
-            val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(R.id.benchmarkTypeTextView)
-            benchmarkTypeTextView.text = "unencrypted same content"
-            val durationCountEditText = benchmarkResultView.findViewById<EditText>(R.id.benchmarkCountDurationEditText)
-
-            val timeRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.timeRadioButton)
-            val blocksRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.blocksRadioButton)
-
-            blocksRadioButton.isChecked = true
-            val graphResolutionEditText = benchmarkResultView.findViewById<EditText>(R.id.graphResolutionEditText)
-//            graphResolutionEditText.setFocusable(true)
-//            graphResolutionEditText.setFocusableInTouchMode(true)
-            val runBenchmarkButton = benchmarkResultView.findViewById<Button>(R.id.runBenchmarkButton)
-
-            val totalTimeTextView = benchmarkResultView.findViewById<TextView>(R.id.totalTimeValueTextView)
-            val bandwithTextView = benchmarkResultView.findViewById<TextView>(R.id.bandwithValueTextView)
-
-            val constraintLayout = benchmarkResultView.findViewById<ConstraintLayout>(R.id.resultConstraintLayout)
-
-            constraintLayout.post(Runnable {
-                builder.window?.clearFlags(
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-                )
-            })
-
-            val lineChart = benchmarkResultView.findViewById<LineChart>(R.id.benchmarkLineChart)
-            lineChart.setTouchEnabled(true)
-            lineChart.setPinchZoom(true)
-
-            lineChart.description.text = "Days"
-            lineChart.setNoDataText("No forex yet!")
-
-            runBenchmarkButton.setOnClickListener {
-                var resolution = graphResolutionEditText.text.toString()
-                if (resolution == "") {
-                    resolution = "10"
-                }
-
-                var blocksOrTime = durationCountEditText.text.toString()
-                if (blocksOrTime == "") {
-                    blocksOrTime = if (timeRadioButton.isChecked) {
-                        "1"
-                    } else {
-                        "1000"
-                    }
-                }
-
-                val result = engineBenchmark.unencryptedBasicSameContent(
-                    Integer.parseInt(resolution),
-                    Integer.parseInt(blocksOrTime),
-                    timeRadioButton.isChecked
-                )
-
-                val df = DecimalFormat("#.##")
-                df.roundingMode = RoundingMode.DOWN
-                val roundoff = df.format(result.payloadBandwith)
-                totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
-                bandwithTextView.text = roundoff
-
-                val dataset = LineDataSet(result.timePerBlock, "time per block")
-                dataset.setDrawValues(false)
-                dataset.lineWidth = 3f
-                lineChart.data = LineData(dataset)
-
-                lineChart.animateX(1800, Easing.EaseInExpo)
-
-            }
-
-
-//            val result = engineBenchmark.unencryptedBasicSameContent()
-//            resultTextView.text = result.toString()
+            specificBenchmark(builder, benchmarkResultView, engineBenchmark)
         }
 
         button2.setOnClickListener {
-            val result = engineBenchmark.unencryptedBasicRandom(receiverList, messageList)
-            resultTextView.text = result.toString()
+            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandom")
         }
 
         button3.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSigned(getPrivateKey(requireContext()), receiverList, messageList)
-            resultTextView.text = result.toString()
+            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSigned")
         }
 
         button4.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSignedTrustChain(receiverList, messageList)
-            resultTextView.text = result.toString()
+            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSignedPermanentStorage")
         }
 
         button5.setOnClickListener {
-            val result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(requireContext(), receiverList, messageList)
-            resultTextView.text = result.toString()
+            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSignedPermanentStorage")
         }
 
         button6.setOnClickListener {
             if (peers.size > 0) {
-                val result = engineBenchmark.unencryptedRandomContentSendIPv8(getPrivateKey(requireContext()), requireContext(), peers.get(0).peer, messageList)
-                resultTextView.text = result.toString()
+//                val result = engineBenchmark.unencryptedRandomContentSendIPv8(getPrivateKey(requireContext()), requireContext(), peers.get(0).peer, messageList)
+//                resultTextView.text = result.toString()
+                println(peers[0].peerPK)
             }
         }
         builder.setCanceledOnTouchOutside(true)
