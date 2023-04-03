@@ -136,13 +136,12 @@ open class TransactionEngineBenchmark(
 
         if (time) {
             var counter = 0
-            var previous : Long = 0
-            while (System.nanoTime() < (startTime) + numberOfBlocks * 1000000000) {
+            var previous : Long = System.nanoTime()
+            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
                 blockList.add(BasicBlock(type, message, senderPublicKey, receiverPublicKey, "".toByteArray()))
                 counter++
                 if (counter % graphResolution == 0) {
                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-//                    println("added " + ((System.nanoTime().toFloat() - previous) / graphResolution.toFloat())/1000000000f)
                     previous = System.nanoTime()
                 }
             }
@@ -158,7 +157,6 @@ open class TransactionEngineBenchmark(
                 println("index: " + i.toString() + " resolution " + graphResolution.toString() + " modulo " + (i % graphResolution))
                 if (i % graphResolution == 0) {
                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-                    println("nanotime " + System.nanoTime() + " previous " + previous + " divided " + (System.nanoTime() - previous) / graphResolution.toFloat())
                     previous = System.nanoTime()
 
                 }
