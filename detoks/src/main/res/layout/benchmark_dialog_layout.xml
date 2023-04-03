@@ -55,18 +55,17 @@
             android:text="random signed" />
 
         <Button
-            android:id="@+id/benchmarkButton4"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="random signed TrustChain" />
-
-        <Button
             android:id="@+id/benchMarkButton5"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Random signed trustchain permament" />
+
+        <Button
+            android:id="@+id/comparisonButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Compare non-ipv8" />
 
         <Button
             android:id="@+id/benchmarkButton6"

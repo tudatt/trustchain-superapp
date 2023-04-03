@@ -13,9 +13,11 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.components.YAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
@@ -39,6 +41,7 @@ import nl.tudelft.trustchain.common.ui.BaseFragment
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.util.*
+import kotlin.collections.ArrayList
 
 private const val PREF_PRIVATE_KEY = "private_key"
 
@@ -329,6 +332,125 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         }
     }
 
+    private fun runComparisonBenchmark(builder: AlertDialog, engineBenchmark: TransactionEngineBenchmark) {
+        val benchmarkComparison : View = layoutInflater.inflate(R.layout.nonipv8_benchmark_comparison, null)
+        builder.setContentView(benchmarkComparison)
+        builder.show()
+
+        val chart = builder.findViewById<LineChart>(R.id.benchmarkLineChart)
+        chart.setTouchEnabled(true)
+        chart.setPinchZoom(true)
+        chart.setNoDataText("Waiting for benchmark result")
+
+        var allLineData : ArrayList<ILineDataSet> = ArrayList()
+
+        val receiverList : ArrayList<ByteArray> = ArrayList()
+        val messageList : ArrayList<ByteArray> = ArrayList()
+
+        val random = Random()
+
+        // generate messages and recipients
+
+            for (i in 0 .. 25000) {
+                var receiverArray : ByteArray = ByteArray(64)
+                random.nextBytes(receiverArray)
+                receiverList.add(receiverArray)
+
+                var messageArray = ByteArray(200)
+                random.nextBytes(messageArray)
+                messageList.add(messageArray)
+            }
+
+
+        // get unencryptedBasicSameContent
+        val blockCountList : ArrayList<Int> = arrayListOf(1000, 2000, 5000, 10000, 15000, 20000, 25000)
+
+        val unencryptedBasicSameContentValues : ArrayList<Entry> = ArrayList()
+        val unencryptedBasicRandomValues : ArrayList<Entry> = ArrayList()
+        val unencryptedBasicRandomSignedValues : ArrayList<Entry> = ArrayList()
+        val unencryptedBasicRandomTrustchainValues : ArrayList<Entry> = ArrayList()
+
+        val startComparisonButton = benchmarkComparison.findViewById<Button>(R.id.startComparisonButton)
+
+        startComparisonButton.setOnClickListener {
+            for (i in 0 until blockCountList.size) {
+                println("benchmarking " + i)
+                val result = engineBenchmark.unencryptedBasicSameContent(
+                    100,
+                    blockCountList[i],
+                    false
+                )
+                unencryptedBasicSameContentValues.add(Entry(blockCountList[i].toFloat(), result.totalTime.toFloat()))
+
+                println("benchmarking " + i)
+                val unencryptedBasicRandomResult = engineBenchmark.unencryptedBasicRandom(
+                    receiverList,
+                    messageList,
+                    100,
+                    blockCountList[i],
+                    false
+                )
+                unencryptedBasicRandomValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomResult.totalTime.toFloat()))
+
+
+                println("benchmarking " + i)
+                val unencryptedBasicRandomSignedResult = engineBenchmark.unencryptedRandomSigned(
+                    getPrivateKey(requireContext()),
+                    receiverList,
+                    messageList,
+                    100,
+                    blockCountList[i],
+                    false
+                )
+                unencryptedBasicRandomSignedValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomSignedResult.totalTime.toFloat()))
+
+                println("benchmarking " + i)
+                val unencryptedBasicRandomTrustchainResult = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
+                    requireContext(),
+                    receiverList,
+                    messageList,
+                    100,
+                    blockCountList[i],
+                    false
+                )
+                unencryptedBasicRandomTrustchainValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomTrustchainResult.totalTime.toFloat()))
+
+
+            }
+            val unencrypted = LineDataSet(unencryptedBasicSameContentValues, "unencrypted ")
+            val unencryptedRandom = LineDataSet(unencryptedBasicRandomValues, "unencrypted random")
+            val unencryptedRandomSigned = LineDataSet(unencryptedBasicRandomSignedValues, "unencrypted random signed")
+            val unencryptedRandomSignedTrustchain = LineDataSet(unencryptedBasicRandomTrustchainValues, "unencrypted random signed TrustChain")
+
+            unencrypted.color = R.color.red
+            unencryptedRandom.color = R.color.blue
+            unencryptedRandomSigned.color = R.color.green
+            unencryptedRandomSignedTrustchain.color = R.color.colorPrimary
+
+            allLineData.add(unencrypted)
+            allLineData.add(unencryptedRandom)
+            allLineData.add(unencryptedRandomSigned)
+            allLineData.add(unencryptedRandomSignedTrustchain)
+
+            val lineData : LineData = LineData(allLineData)
+            val leftYAxis = chart.axisLeft
+            leftYAxis.isEnabled = false
+
+            val rightYAxis = chart.axisRight
+            rightYAxis.isEnabled = false
+
+            chart.legend.isWordWrapEnabled = true
+
+            chart.data = lineData
+            chart.animateXY(1800, 1800, Easing.EaseInExpo)
+
+
+        }
+
+
+
+    }
+
     private fun runSpecificRandomBenchmark(builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark, type: String) {
         builder.setContentView(benchmarkResultView)
         builder.show()
@@ -462,7 +584,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         val button1 = view.findViewById<Button>(R.id.benchmarkButton1)
         val button2 = view.findViewById<Button>(R.id.benchmarkButton2)
         val button3 = view.findViewById<Button>(R.id.benchmarkButton3)
-        val button4 = view.findViewById<Button>(R.id.benchmarkButton4)
+        val comparisonButton = view.findViewById<Button>(R.id.comparisonButton)
         val button5 = view.findViewById<Button>(R.id.benchMarkButton5)
         val button6 = view.findViewById<Button>(R.id.benchmarkButton6)
 //        val button7 = view.findViewById<Button>(R.id.benchmarkButton7)
@@ -491,8 +613,9 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
             runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSigned")
         }
 
-        button4.setOnClickListener {
-            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSignedPermanentStorage")
+        comparisonButton.setOnClickListener {
+            // compare all the non-ipv8 benchmarks
+            runComparisonBenchmark(builder, engineBenchmark)
         }
 
         button5.setOnClickListener {
