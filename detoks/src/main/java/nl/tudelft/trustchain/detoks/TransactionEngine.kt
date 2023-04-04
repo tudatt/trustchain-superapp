@@ -10,17 +10,13 @@ import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.attestation.trustchain.BlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainBlock
 import nl.tudelft.ipv8.attestation.trustchain.UNKNOWN_SEQ
-import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockBroadcastPayload
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.PrivateKey
 import nl.tudelft.ipv8.messaging.Packet
-import nl.tudelft.ipv8.messaging.payload.IntroductionRequestPayload
 import nl.tudelft.ipv8.sqldelight.Database
-import nl.tudelft.ipv8.util.random
 import java.util.*
 import kotlin.collections.ArrayList
-import kotlin.math.min
 import com.github.mikephil.charting.data.Entry
 
 open class TransactionEngine (override val serviceId: String): Community() {
@@ -148,7 +144,7 @@ open class TransactionEngineBenchmark(
 
             val totalTime : Long = System.nanoTime() - startTime
             val payloadBandwith : Double = (message.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
 
         } else {
             var previous : Long = System.nanoTime()
@@ -164,7 +160,7 @@ open class TransactionEngineBenchmark(
             val totalTime : Long = System.nanoTime() - startTime
 
             val payloadBandwith : Double = (message.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
     }
 
@@ -194,7 +190,7 @@ open class TransactionEngineBenchmark(
 
             val totalTime : Long = System.nanoTime() - startTime
             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
 
         } else {
             var previous : Long = System.nanoTime()
@@ -210,7 +206,7 @@ open class TransactionEngineBenchmark(
             val totalTime : Long = System.nanoTime() - startTime
 
             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
     }
 
@@ -242,7 +238,7 @@ open class TransactionEngineBenchmark(
 
              val totalTime : Long = System.nanoTime() - startTime
              val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
 
          } else {
              var previous : Long = System.nanoTime()
@@ -258,7 +254,7 @@ open class TransactionEngineBenchmark(
              val totalTime : Long = System.nanoTime() - startTime
 
              val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
          }
 
     }
@@ -315,7 +311,7 @@ open class TransactionEngineBenchmark(
 
             val totalTime : Long = System.nanoTime() - startTime
             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
 
         } else {
             var previous : Long = System.nanoTime()
@@ -334,15 +330,14 @@ open class TransactionEngineBenchmark(
             val totalTime : Long = System.nanoTime() - startTime
 
             val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith)
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
     }
 
     // ============================== BLOCK SENDING METHODS ========================================
 
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    fun unencryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer, messageList: ArrayList<ByteArray>) : Long {
-        incomingBlockEchos.clear()
+    fun unencryptedRandomContentSendIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -350,55 +345,128 @@ open class TransactionEngineBenchmark(
         }
 
         val store = TrustChainSQLiteStore(Database(driver))
-        val random = Random()
         val startTime = System.nanoTime()
+        val timePerBlock : ArrayList<Entry> = ArrayList()
 
 
-        for (i in 0 .. 1000) {
-            val message = ByteArray(200)
-            random.nextBytes(message)
-            val receiverPublicKey = ByteArray(64)
-            random.nextBytes(receiverPublicKey)
+        if (time) {
+            var counter = 0
+            var previous : Long = System.nanoTime()
+            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[counter%messageList.size], receiverList[counter%receiverList.size]
+                )
+                blockBuilder.sign()
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
+                counter++
+                if (counter % graphResolution == 0) {
+                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+                }
+            }
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList.get(i), key.pub().keyToBin())
+            val totalTime : Long = System.nanoTime() - startTime
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
 
-            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
+        } else {
+            var previous : Long = System.nanoTime()
+            for (i in 0..numberOfBlocks) {
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[i], receiverList[i]
+                )
+                blockBuilder.sign()
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
+                if (i % graphResolution == 0) {
+                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+
+                }
+            }
+            val totalTime : Long = System.nanoTime() - startTime
+
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
-        return System.nanoTime() - startTime
     }
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomContentSendIPv8(key: PrivateKey, context: Context?, destinationPeer: Peer) : Long {
-        incomingBlockEchos.clear()
+    fun encryptedRandomContentSendIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
             JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         }
+
         val store = TrustChainSQLiteStore(Database(driver))
-        val random = Random()
         val startTime = System.nanoTime()
+        val timePerBlock : ArrayList<Entry> = ArrayList()
 
-        for (i in 0 .. 1000) {
-            val message = ByteArray(200)
-            random.nextBytes(message)
 
-            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", message, key.pub().keyToBin())
+        if (time) {
+            var counter = 0
+            var previous : Long = System.nanoTime()
+            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[counter%messageList.size], receiverList[counter%receiverList.size]
+                )
+                blockBuilder.sign()
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
+                counter++
+                if (counter % graphResolution == 0) {
+                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+                }
+            }
 
-            txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
+            val totalTime : Long = System.nanoTime() - startTime
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
+
+        } else {
+            var previous : Long = System.nanoTime()
+            for (i in 0..numberOfBlocks) {
+                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                    messageList[i], receiverList[i]
+                )
+                blockBuilder.sign()
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
+                if (i % graphResolution == 0) {
+                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
+                    previous = System.nanoTime()
+
+                }
+            }
+            val totalTime : Long = System.nanoTime() - startTime
+
+            val payloadBandwith : Double = (messageList[0].size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
+            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
-        return System.nanoTime() - startTime
     }
 
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-    fun encryptedRandomReceiveIPv8(key: PrivateKey, context: Context?, peer: Peer, timeout: Long) : Pair<Long, Int> {
+    fun encryptedRandomContentReceiveIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+        incomingBlockEchos.clear()
         val startTime = System.nanoTime()
-        encryptedRandomContentSendIPv8(key,context,peer)
-        println("Waiting for $timeout seconds to receive incoming blocks")
-        Thread.sleep(timeout*1000) // wait for 10 seconds
+        val timePerBlock : ArrayList<Entry> = ArrayList()
+        val res = encryptedRandomContentSendIPv8(key,destinationPeer,context,receiverList,messageList,graphResolution,numberOfBlocks,time)
+
+        println("Waiting for 10 seconds to receive incoming blocks")
+        Thread.sleep(10000) // wait for 10 seconds
         println("Done waiting.")
-        val loss = 1000-incomingBlockEchos.size
-        return Pair(incomingBlockEchos.max()-startTime,loss)
+
+        val numReceived = incomingBlockEchos.size
+
+        for (i in 0..numReceived) {
+            if (i % graphResolution == 0) {
+                timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - incomingBlockEchos[i]) / graphResolution.toFloat()))
+            }
+        }
+        val totalTime : Long = System.nanoTime() - incomingBlockEchos.max()
+        val lostPackets = res.timePerBlock.size - incomingBlockEchos.size
+
+        val payloadBandwith : Double = (messageList[0].size * numReceived).toDouble() / (totalTime / 1000000000).toDouble()
+        return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,lostPackets.toLong())
     }
 
     //========Message Handlers==========
