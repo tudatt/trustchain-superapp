@@ -1,15 +1,13 @@
 package nl.tudelft.trustchain.detoks
 
 import android.content.Context
+import android.widget.TextView
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
-import nl.tudelft.ipv8.attestation.trustchain.BlockBuilder
-import nl.tudelft.ipv8.attestation.trustchain.TrustChainBlock
-import nl.tudelft.ipv8.attestation.trustchain.UNKNOWN_SEQ
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockBroadcastPayload
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
@@ -22,6 +20,11 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.min
 import com.github.mikephil.charting.data.Entry
+import kotlinx.android.synthetic.main.test_fragment_layout.*
+import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
+import nl.tudelft.ipv8.attestation.trustchain.*
+import nl.tudelft.ipv8.util.toHex
+import kotlin.collections.HashMap
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
@@ -116,6 +119,15 @@ open class TransactionEngineBenchmark(
 
 
     private val incomingBlockEchos = mutableListOf<Long>()
+    var currentBenchmarkIdentifier : String = ""
+    var benchmarkStartTime : Long = 0
+    private val receivedAgreements : ArrayList<Pair<TrustChainBlock, Float>> = ArrayList()
+    var highestReceivedBenchmarkCounter : Int = 0
+    var benchmarkCounter : Int = 0
+    val trustchainIPv8graphData : ArrayList<Entry> = ArrayList()
+    val trustchainSendTimeHashmap : HashMap<Int, Long> = HashMap()
+    var latestReceivedAgreement : Long = 0
+
 
     init{
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
@@ -399,6 +411,49 @@ open class TransactionEngineBenchmark(
         println("Done waiting.")
         val loss = 1000-incomingBlockEchos.size
         return Pair(incomingBlockEchos.max()-startTime,loss)
+    }
+
+    fun registerTrustChainBenchmarkListenerSigner(trustchainInstance: TrustChainCommunity, privateKey: PrivateKey) {
+        trustchainInstance.addListener("benchmark_block", object : BlockListener {
+            override fun onBlockReceived(block: TrustChainBlock) {
+                if (block.isAgreement && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
+                    val benchmarkIndex : Int = Integer.parseInt(block.transaction["message"].toString().drop(9).take(3))
+                    println("benchmark: received $benchmarkIndex and index $benchmarkCounter")
+                    benchmarkCounter++
+                    trustchainSendTimeHashmap[benchmarkIndex]?.let { Entry(benchmarkIndex.toFloat(), it.toFloat()) }
+                        ?.let { trustchainIPv8graphData.add(it) }
+                    if (benchmarkIndex > highestReceivedBenchmarkCounter) {
+                        highestReceivedBenchmarkCounter = benchmarkIndex
+                    }
+                    latestReceivedAgreement = System.nanoTime()
+                    println("received benchmark $benchmarkIndex")
+                }
+            }
+        })
+    }
+
+    fun trustchainIpv8Benchmark(trustchainInstance: TrustChainCommunity, peer: Peer, privateKey: PrivateKey, timeout: Long) : BenchmarkResult {
+
+        val benchmarkIdentifier: String = UUID.randomUUID().toString()
+        currentBenchmarkIdentifier = benchmarkIdentifier
+        benchmarkStartTime = System.nanoTime()
+        benchmarkCounter = 0
+
+        registerTrustChainBenchmarkListenerSigner(trustchainInstance, privateKey)
+
+        Thread(Runnable {
+            for (i in 0..999) {
+                val index : String = i.toString().padStart(3, '0')
+                val transaction = mapOf("message" to "benchmark$index-$benchmarkIdentifier")
+                trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
+                trustchainSendTimeHashmap[i] = System.nanoTime()
+            }
+        }).start()
+
+        Thread.sleep(timeout)
+
+        return BenchmarkResult(trustchainIPv8graphData,  latestReceivedAgreement - benchmarkStartTime, 0.0)
+
     }
 
     //========Message Handlers==========

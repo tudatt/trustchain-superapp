@@ -80,6 +80,12 @@
             android:layout_height="wrap_content"
             android:text="encrypted random ipv8" />
 
+        <Button
+            android:id="@+id/trustchainBenchmarkButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TrustChain" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -50,7 +50,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
     lateinit var trustchainInstance: DetoksTrustChainCommunity
-//    lateinit var deToksCommunity: DeToksCommunity
+    lateinit var deToksCommunity: DeToksCommunity
 
 
     var benchmarkStartTime : Long = 0
@@ -158,7 +158,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
-//        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
+        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // Call this method to register the validator.
         registerValidator()
@@ -587,6 +587,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         val comparisonButton = view.findViewById<Button>(R.id.comparisonButton)
         val button5 = view.findViewById<Button>(R.id.benchMarkButton5)
         val button6 = view.findViewById<Button>(R.id.benchmarkButton6)
+        val trustchainBenchmarkButton = view.findViewById<Button>(R.id.trustchainBenchmarkButton)
 //        val button7 = view.findViewById<Button>(R.id.benchmarkButton7)
 
 //        val resultTextView = view.findViewById<TextView>(R.id.resultTimeTextView)
@@ -627,6 +628,13 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 //                val result = engineBenchmark.unencryptedRandomContentSendIPv8(getPrivateKey(requireContext()), requireContext(), peers.get(0).peer, messageList)
 //                resultTextView.text = result.toString()
                 println(peers[0].peerPK)
+            }
+        }
+
+        trustchainBenchmarkButton.setOnClickListener {
+            if (peers.size > 0) {
+//                engineBenchmark.trustchainIpv8Benchmark(trustchainInstance, peers[0].peer, getPrivateKey(requireContext()))
+                println("I don't work yet")
             }
         }
         builder.setCanceledOnTouchOutside(true)
