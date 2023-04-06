@@ -353,7 +353,7 @@ open class TransactionEngineBenchmark(
     // ============================== BLOCK SENDING METHODS ========================================
 
     // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    fun unencryptedRandomContentSendIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+    fun unencryptedRandomContentSendIPv8(destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -407,7 +407,7 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomContentSendIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+    fun encryptedRandomContentSendIPv8(destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
@@ -461,11 +461,11 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-    fun encryptedRandomContentReceiveIPv8(key: PrivateKey,  destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+    fun encryptedRandomContentReceiveIPv8(destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         incomingBlockEchos.clear()
-        val startTime = System.nanoTime()
+//        val startTime = System.nanoTime()
         val timePerBlock : ArrayList<Entry> = ArrayList()
-        val res = encryptedRandomContentSendIPv8(key,destinationPeer,context,receiverList,messageList,graphResolution,numberOfBlocks,time)
+        val res = encryptedRandomContentSendIPv8(destinationPeer,context,receiverList,messageList,graphResolution,numberOfBlocks,time)
 
         println("Waiting for 10 seconds to receive incoming blocks")
         Thread.sleep(10000) // wait for 10 seconds
@@ -524,7 +524,7 @@ open class TransactionEngineBenchmark(
 
         Thread.sleep(timeout)
 
-        return BenchmarkResult(trustchainIPv8graphData,  latestReceivedAgreement - benchmarkStartTime, 0.0)
+        return BenchmarkResult(trustchainIPv8graphData,  latestReceivedAgreement - benchmarkStartTime, 0.0, 0)
 
     }
 

@@ -158,7 +158,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         //registerValidator(trustchain)
 
         trustchainInstance = IPv8Android.getInstance().getOverlay()!!
-        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
+//        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
         // Call this method to register the validator.
         registerValidator()
@@ -548,15 +548,28 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked
                 )
+                "unencryptedBasicRandomSignedPermanentStorage" -> result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
+                    requireContext(),
+                    receiverList,
+                    messageList,
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
                 else -> {
-                    result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
-                        requireContext(),
-                        receiverList,
-                        messageList,
-                        Integer.parseInt(resolution),
-                        Integer.parseInt(blocksOrTime),
-                        timeRadioButton.isChecked
-                    )
+                    if (peers.size > 0) {
+                        result = engineBenchmark.encryptedRandomContentSendIPv8(
+                            peers[0].peer,
+                            requireContext(),
+                            receiverList,
+                            messageList,
+                            Integer.parseInt(resolution),
+                            Integer.parseInt(blocksOrTime),
+                            timeRadioButton.isChecked)
+                    } else {
+                        result = BenchmarkResult(ArrayList(), 0, 0.0, 0);
+                    }
+
                 }
             }
 
@@ -625,8 +638,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         button6.setOnClickListener {
             if (peers.size > 0) {
-//                val result = engineBenchmark.unencryptedRandomContentSendIPv8(getPrivateKey(requireContext()), requireContext(), peers.get(0).peer, messageList)
-//                resultTextView.text = result.toString()
+                runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "asdf")
                 println(peers[0].peerPK)
             }
         }
