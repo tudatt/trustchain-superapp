@@ -28,22 +28,22 @@ import kotlin.collections.HashMap
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
-    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int, myPeer:Peer) {
         println("sending block...")
-        sendBlockToRecipient(peer, block, encrypt,msgID)
+        sendBlockToRecipient(peer, block, encrypt,msgID,myPeer)
     }
 
     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
         messageHandlers[msgIdFixer(onMessageId)] = receiver
     }
 
-    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int) {
+    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int, myPeer:Peer) {
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
-            serializePacket(msgID, payload, false, encrypt = true, recipient = peer)
+            serializePacket(msgID, payload, false, encrypt = true, recipient = peer, peer = myPeer)
         } else {
-            serializePacket(msgID, payload, false)
+            serializePacket(msgID, payload, false, peer = myPeer)
         }
 
         send(peer, data)
@@ -373,7 +373,7 @@ open class TransactionEngineBenchmark(
                     messageList[counter%messageList.size], receiverList[counter%receiverList.size]
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED,myPeer)
                 counter++
                 if (counter % graphResolution == 0) {
                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
@@ -392,7 +392,7 @@ open class TransactionEngineBenchmark(
                     messageList[i], receiverList[i]
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED,myPeer)
                 if (i % graphResolution == 0) {
                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
                     previous = System.nanoTime()
@@ -427,7 +427,7 @@ open class TransactionEngineBenchmark(
                     messageList[counter%messageList.size], receiverList[counter%receiverList.size]
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED,myPeer)
                 counter++
                 if (counter % graphResolution == 0) {
                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
@@ -446,7 +446,7 @@ open class TransactionEngineBenchmark(
                     messageList[i], receiverList[i]
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED,myPeer)
                 if (i % graphResolution == 0) {
                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
                     previous = System.nanoTime()
@@ -463,7 +463,7 @@ open class TransactionEngineBenchmark(
     // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
     fun encryptedRandomContentReceiveIPv8(destinationPeer: Peer, context: Context?, receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         incomingBlockEchos.clear()
-//        val startTime = System.nanoTime()
+        val startTime = System.nanoTime()
         val timePerBlock : ArrayList<Entry> = ArrayList()
         val res = encryptedRandomContentSendIPv8(destinationPeer,context,receiverList,messageList,graphResolution,numberOfBlocks,time)
 
@@ -478,7 +478,7 @@ open class TransactionEngineBenchmark(
                 timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - incomingBlockEchos[i]) / graphResolution.toFloat()))
             }
         }
-        val totalTime : Long = System.nanoTime() - incomingBlockEchos.max()
+        val totalTime : Long = startTime - incomingBlockEchos.max()
         val lostPackets = res.timePerBlock.size - incomingBlockEchos.size
 
         val payloadBandwith : Double = (messageList[0].size * numReceived).toDouble() / (totalTime / 1000000000).toDouble()
@@ -538,7 +538,7 @@ open class TransactionEngineBenchmark(
             incomingTime.toULong()
         )
         println("received")
-        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO)
+        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO,myPeer)
     }
     // This method is used to track incoming encrypted block echos and store them for benchmarking
     private fun onEncryptedEchoPacket(packet: Packet) {
