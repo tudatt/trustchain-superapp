@@ -34,7 +34,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
     }
 
     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
-        messageHandlers[msgIdFixer(onMessageId)] = receiver
+        messageHandlers[onMessageId] = receiver
     }
 
     private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int, myPeer:Peer) {
@@ -79,11 +79,6 @@ open class TransactionEngine (override val serviceId: String): Community() {
         }
     }
 
-    private fun msgIdFixer(msgid: Int): Int{
-        @Suppress("DEPRECATION")
-        return msgid.toChar().toByte().toInt()
-    }
-
     class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngine>(TransactionEngine::class.java) {
         override fun create(): TransactionEngine {
             return TransactionEngine(serviceId)
@@ -112,9 +107,9 @@ open class TransactionEngineBenchmark(
     private val myPeer: Peer
 ){
     object MessageId {
-        const val BLOCK_UNENCRYPTED = 35007
-        const val BLOCK_ENCRYPTED = 350072
-        const val BLOCK_ENCRYPTED_ECHO = 3500721
+        const val BLOCK_UNENCRYPTED = 240
+        const val BLOCK_ENCRYPTED = 241
+        const val BLOCK_ENCRYPTED_ECHO = 242
     }
 
 
