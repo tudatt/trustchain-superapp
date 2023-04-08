@@ -344,22 +344,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         var allLineData : ArrayList<ILineDataSet> = ArrayList()
 
-        val receiverList : ArrayList<ByteArray> = ArrayList()
-        val messageList : ArrayList<ByteArray> = ArrayList()
-
-        val random = Random()
-
         // generate messages and recipients
-
-            for (i in 0 .. 25000) {
-                var receiverArray : ByteArray = ByteArray(64)
-                random.nextBytes(receiverArray)
-                receiverList.add(receiverArray)
-
-                var messageArray = ByteArray(200)
-                random.nextBytes(messageArray)
-                messageList.add(messageArray)
-            }
 
 
         // get unencryptedBasicSameContent
@@ -384,8 +369,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
                 println("benchmarking " + i)
                 val unencryptedBasicRandomResult = engineBenchmark.unencryptedBasicRandom(
-                    receiverList,
-                    messageList,
                     100,
                     blockCountList[i],
                     false
@@ -396,8 +379,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                 println("benchmarking " + i)
                 val unencryptedBasicRandomSignedResult = engineBenchmark.unencryptedRandomSigned(
                     getPrivateKey(requireContext()),
-                    receiverList,
-                    messageList,
                     100,
                     blockCountList[i],
                     false
@@ -407,8 +388,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                 println("benchmarking " + i)
                 val unencryptedBasicRandomTrustchainResult = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
                     requireContext(),
-                    receiverList,
-                    messageList,
                     100,
                     blockCountList[i],
                     false
@@ -501,57 +480,21 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                 }
             }
 
-            val random : Random = Random()
-
-
-            val receiverList : ArrayList<ByteArray> = ArrayList()
-            val messageList : ArrayList<ByteArray> = ArrayList()
-            // generate messages and recipients
-            if (blocksRadioButton.isChecked) {
-
-                for (i in 0 .. Integer.parseInt(durationCountEditText.text.toString())) {
-                    var receiverArray : ByteArray = ByteArray(64)
-                    random.nextBytes(receiverArray)
-                    receiverList.add(receiverArray)
-
-                    var messageArray = ByteArray(200)
-                    random.nextBytes(messageArray)
-                    messageList.add(messageArray)
-                }
-            } else {
-                for (i in 0 .. 1000) {
-                    var receiverArray : ByteArray = ByteArray(64)
-                    random.nextBytes(receiverArray)
-                    receiverList.add(receiverArray)
-
-                    var messageArray = ByteArray(200)
-                    random.nextBytes(messageArray)
-                    messageList.add(messageArray)
-                }
-            }
-
             val result : BenchmarkResult
-
 
             when (type) {
                 "unencryptedBasicRandom" -> result = engineBenchmark.unencryptedBasicRandom(
-                    receiverList,
-                    messageList,
                     Integer.parseInt(resolution),
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked)
                 "unencryptedBasicRandomSigned" -> result = engineBenchmark.unencryptedRandomSigned(
                     getPrivateKey(requireContext()),
-                    receiverList,
-                    messageList,
                     Integer.parseInt(resolution),
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked
                 )
                 "unencryptedBasicRandomSignedPermanentStorage" -> result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
                     requireContext(),
-                    receiverList,
-                    messageList,
                     Integer.parseInt(resolution),
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked
@@ -561,8 +504,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                         result = engineBenchmark.encryptedRandomContentSendIPv8(
                             peers[0].peer,
                             requireContext(),
-                            receiverList,
-                            messageList,
                             Integer.parseInt(resolution),
                             Integer.parseInt(blocksOrTime),
                             timeRadioButton.isChecked)
