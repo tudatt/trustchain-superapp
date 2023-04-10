@@ -32,24 +32,30 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[MessageId.HALF_BLOCK_BROADCAST_ENCRYPTED] = ::onHalfBlockBroadcastPacket
     }
 
-    fun sendTransaction(blockBuilder: BlockBuilder, peer: Peer?, encrypt: Boolean = false) {
-        logger.info { "Sending transaction..." }
-        val block = blockBuilder.sign()
-
-        if (peer != null) {
-            sendBlockToRecipient(peer, block, encrypt)
-        } else {
-            sendBlockBroadcast(block, encrypt)
-        }
+    fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
+        messageHandlers[onMessageId] = receiver
     }
 
-    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean) {
+    fun sendTransaction(block: TrustChainBlock,
+                        peer: Peer,
+                        encrypt: Boolean = false,
+                        msgID: Int,
+                        myPeer:Peer) {
+        logger.info { "Sending transaction..." }
+        sendBlockToRecipient(peer, block, encrypt, msgID, myPeer)
+    }
+
+    private fun sendBlockToRecipient(peer: Peer,
+                                     block: TrustChainBlock,
+                                     encrypt: Boolean,
+                                     msgID: Int,
+                                     myPeer: Peer) {
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
-            serializePacket(MessageId.HALF_BLOCK_ENCRYPTED, payload, false, encrypt = true, recipient = peer)
+            serializePacket(msgID, payload, false, encrypt = true, recipient = peer, peer = myPeer)
         } else {
-            serializePacket(MessageId.HALF_BLOCK, payload, false)
+            serializePacket(msgID, payload, false, peer = myPeer)
         }
 
         send(peer, data)
