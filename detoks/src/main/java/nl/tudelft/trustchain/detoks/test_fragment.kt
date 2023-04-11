@@ -100,46 +100,6 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         // get the deToksCommunity for use in the benchmark
 //        deToksCommunity = IPv8Android.getInstance().getOverlay()!!
 
-        // DEFINE BEHAVIOR BOOTSTRAP SERVERS
-
-        // button to show the bootstrap servers
-        val button = view.findViewById<Button>(R.id.bootstrapButton)
-
-        button.setOnClickListener {
-            // select the popup layout file
-            val popupView = LayoutInflater.from(requireContext()).inflate(R.layout.popup_servers, null)
-
-            // open the popup window in the middle of the screen
-            val popupWindow = PopupWindow(popupView, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
-            popupWindow.showAtLocation(view, Gravity.CENTER, 0, 0)
-
-
-            val text = popupView.findViewById<TextView>(R.id.text_popup)
-
-            val com = getTrustChainCommunity()
-
-            val walkable = com.getWalkableAddresses()
-
-            var res_str = "BOOTSTRAP SERVERS : \n"
-
-            Community.DEFAULT_ADDRESSES.forEach {address ->
-                res_str += address.toString()
-                res_str += if (address in walkable) " UP\n"; else " DOWN\n"
-
-            }
-            res_str += "\n WALKABLE ADDRESSES :\n" + walkable.joinToString("\n")
-            res_str += "\n\nWAN: " + com.myEstimatedWan.toString() + "\n"
-            res_str += "`\nLAN: " + com.myEstimatedLan.toString() + "\n"
-            text.text = res_str
-            // showing the servers on the popup and if they're active or not.
-
-            // close popup window on closebutton click
-            val closeButton = popupView.findViewById<Button>(R.id.close_button)
-            closeButton.setOnClickListener {
-                popupWindow.dismiss()
-            }
-        }
-
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {
             showBenchmarkDialog(peers)
@@ -508,7 +468,12 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
                             Integer.parseInt(blocksOrTime),
                             timeRadioButton.isChecked)
                     } else {
-                        result = BenchmarkResult(ArrayList(), 0, 0.0, 0);
+                        result = engineBenchmark.encryptedRandomContentSendIPv8(
+                            null,
+                            requireContext(),
+                            Integer.parseInt(resolution),
+                            Integer.parseInt(blocksOrTime),
+                            timeRadioButton.isChecked)
                     }
 
                 }
@@ -578,10 +543,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         }
 
         button6.setOnClickListener {
-            if (peers.size > 0) {
-                runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "asdf")
-                println(peers[0].peerPK)
-            }
+            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "asdf")
         }
 
         trustchainBenchmarkButton.setOnClickListener {
