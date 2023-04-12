@@ -29,16 +29,16 @@ import kotlin.collections.HashMap
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
-    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int, myPeer:Peer) {
+    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int) {
         println("sending block...")
-        sendBlockToRecipient(peer, block, encrypt,msgID,myPeer)
+        sendBlockToRecipient(peer, block, encrypt,msgID)
     }
 
     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
         messageHandlers[msgIdFixer(onMessageId)] = receiver
     }
 
-    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int, myPeer:Peer) {
+    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int) {
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
@@ -108,10 +108,7 @@ class SimpleBlockBuilder(
 
 }
 
-open class TransactionEngineBenchmark(
-    private val txEngineUnderTest: TransactionEngine,
-    private val myPeer: Peer
-){
+open class TransactionEngineBenchmark(private val txEngineUnderTest: TransactionEngine) {
     object MessageId {
         const val BLOCK_UNENCRYPTED = 35007
         const val BLOCK_ENCRYPTED = 350072
@@ -260,7 +257,6 @@ open class TransactionEngineBenchmark(
     /**
      * Benchmarks unencrypted signed block creation with random content and random receiver
      * addresses.
-     * @param senderPrivateKey the private key of the node that executes the benchmark
      * @param blocksPerPoint how many blocks will correspond to one point in the final graph
      * @param limit either the time limit (in milliseconds) or the total number of blocks for the
      * benchmark to run (based on [benchmarkByTime])
@@ -268,11 +264,11 @@ open class TransactionEngineBenchmark(
      * specific number of blocks (both specified by [limit])
      * @return a [BenchmarkResult] instance
      */
-    fun unencryptedRandomSigned(senderPrivateKey: PrivateKey,
-                                blocksPerPoint: Int,
+    fun unencryptedRandomSigned(blocksPerPoint: Int,
                                 limit: Int,
                                 time: Boolean): BenchmarkResult {
         val type = "benchmarkRandomSigned"
+        val senderPrivateKey: PrivateKey = txEngineUnderTest.myPeer.key as PrivateKey
         val senderPublicKey : ByteArray = senderPrivateKey.pub().keyToBin()
 
         val random = Random()
@@ -340,30 +336,6 @@ open class TransactionEngineBenchmark(
         return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
     }
 
-
-    // this method can be used to benchmark the creation of signed blocks that are stored in memory. It creates TrustChain blocks as
-    // opposed to the previously used BasicBlocks.
-//     fun unencryptedRandomSignedTrustChain(receiverList: ArrayList<ByteArray>, messageList: ArrayList<ByteArray>, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
-//        val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-//        Database.Schema.create(driver)
-//        val store = TrustChainSQLiteStore(Database(driver))
-//
-//        val random = Random()
-//        val startTime = System.nanoTime()
-//
-//        for (i in 0 .. 1000) {
-//            val message = ByteArray(200)
-//            random.nextBytes(message)
-//
-//            val receiverPublicKey = ByteArray(64)
-//            random.nextBytes(receiverPublicKey)
-//
-//            val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned", messageList[i], receiverList[i])
-//            blockBuilder.sign()
-//
-//        }
-//    }
-
     /**
      * Benchmarks unencrypted signed block creation with random content and random receiver
      * addresses with permanent storage of blocks.
@@ -405,7 +377,7 @@ open class TransactionEngineBenchmark(
                 random.nextBytes(randomReceiver)
 
                 val blockBuilder = SimpleBlockBuilder(
-                    myPeer,
+                    txEngineUnderTest.myPeer,
                     store,
                     "benchmarkTrustchainSigned",
                     randomMessage,
@@ -431,7 +403,7 @@ open class TransactionEngineBenchmark(
                 random.nextBytes(randomReceiver)
 
                 val blockBuilder = SimpleBlockBuilder(
-                    myPeer,
+                    txEngineUnderTest.myPeer,
                     store,
                     "benchmarkTrustchainSigned",
                     randomMessage,
@@ -483,11 +455,19 @@ open class TransactionEngineBenchmark(
                 random.nextBytes(randomMessage)
                 random.nextBytes(randomReceiver)
 
-                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
-                    randomMessage, randomReceiver
+                val blockBuilder = SimpleBlockBuilder(
+                    txEngineUnderTest.myPeer,
+                    store,
+                    "benchmarkTrustchainSigned",
+                    randomMessage,
+                    randomReceiver
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED,myPeer)
+                txEngineUnderTest.sendTransaction(
+                    blockBuilder.sign(),
+                    destinationPeer,
+                    encrypt = false,
+                    MessageId.BLOCK_UNENCRYPTED)
                 counter++
                 if (counter % graphResolution == 0) {
                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
@@ -507,11 +487,14 @@ open class TransactionEngineBenchmark(
             random.nextBytes(randomReceiver)
 
             for (i in 0..numberOfBlocks) {
-                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                val blockBuilder = SimpleBlockBuilder(
+                    txEngineUnderTest.myPeer,
+                    store,
+                    "benchmarkTrustchainSigned",
                     randomMessage, randomReceiver
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED,myPeer)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
                 if (i % graphResolution == 0) {
                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
                     previous = System.nanoTime()
@@ -526,11 +509,17 @@ open class TransactionEngineBenchmark(
     }
 
     // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomContentSendIPv8(destinationPeer: Peer, context: Context?, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
+    fun encryptedRandomContentSendIPv8(destinationPeer: Peer?, context: Context?, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
         val driver: SqlDriver = if(context!=null) {
             AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         } else {
             JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        }
+
+        val destPeer: Peer = if(destinationPeer!=null) {
+            destinationPeer
+        } else {
+            txEngineUnderTest.myPeer
         }
 
         val random = Random()
@@ -551,11 +540,17 @@ open class TransactionEngineBenchmark(
                 random.nextBytes(randomMessage)
                 random.nextBytes(randomReceiver)
 
-                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                val blockBuilder = SimpleBlockBuilder(
+                    txEngineUnderTest.myPeer, store, "benchmarkTrustchainSigned",
                     randomMessage, randomReceiver
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED,myPeer)
+                txEngineUnderTest.sendTransaction(
+                    blockBuilder.sign(),
+                    destPeer,
+                    encrypt = true,
+                    MessageId.BLOCK_ENCRYPTED
+                )
                 counter++
                 if (counter % graphResolution == 0) {
                     timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
@@ -575,11 +570,12 @@ open class TransactionEngineBenchmark(
                 random.nextBytes(randomMessage)
                 random.nextBytes(randomReceiver)
 
-                val blockBuilder = SimpleBlockBuilder(myPeer, store, "benchmarkTrustchainSigned",
+                val blockBuilder = SimpleBlockBuilder(
+                    txEngineUnderTest.myPeer, store, "benchmarkTrustchainSigned",
                     randomMessage, randomReceiver
                 )
                 blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED,myPeer)
+                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
                 if (i % graphResolution == 0) {
                     timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
                     previous = System.nanoTime()
@@ -671,7 +667,7 @@ open class TransactionEngineBenchmark(
             incomingTime.toULong()
         )
         println("received")
-        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO,myPeer)
+        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO)
     }
     // This method is used to track incoming encrypted block echos and store them for benchmarking
     private fun onEncryptedEchoPacket(packet: Packet) {
