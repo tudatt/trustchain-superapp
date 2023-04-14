@@ -29,13 +29,12 @@ import java.text.DecimalFormat
 import java.util.*
 import kotlin.collections.ArrayList
 
-private const val PREF_PRIVATE_KEY = "private_key"
-
 class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransactionOnClick, confirmProposalOnClick, benchmark1000, benchmarkBasicToken1000 {
 
     var peers: ArrayList<PeerViewModel> = arrayListOf()
     var proposals: ArrayList<ProposalViewModel> = arrayListOf()
     lateinit var trustchainInstance: DetoksTrustChainCommunity
+    lateinit var deToksCommunity: DeToksCommunity
 
     var benchmarkStartTime : Long = 0
     var currentBenchmarkIdentifier : String = ""
@@ -44,28 +43,19 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
+        val pkTextView = publicKeyTextView
+        pkTextView.text = "My public key is: " + deToksCommunity.myPeer.key.pub().keyToBin().toHex()`
+
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {
             showBenchmarkDialog()
         }
 
-        val benchmarkTextView = benchmarkStatusTextView
-        benchmarkTextView.text = "Currently not running a benchmark."
-
-        val benchmarkCounterTextView = benchmarkCounterTextView
-        benchmarkCounterTextView.text = ""
-
-        // Call this method to register the validator.
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         val adapter = PeerAdapter(peers, this, this, this)
-
         peerRecyclerView.adapter = adapter
-
-        val proposalRecyclerView = proposalsListView
-        proposalRecyclerView.layoutManager = LinearLayoutManager(requireContext())
-        val proposalAdapter = ProposalAdapter(proposals, this)
-        proposalRecyclerView.adapter = proposalAdapter
 
         Thread {
             val deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()
