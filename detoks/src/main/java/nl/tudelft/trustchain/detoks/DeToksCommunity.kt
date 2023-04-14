@@ -9,7 +9,7 @@ import nl.tudelft.ipv8.messaging.Packet
 
 class DeToksCommunity(
     private val context: Context
-) : TransactionEngine("c86a7db45eb3563ae047639817baec4db2bc7c25") {
+) : TransactionEngine(DetoksConfig.DETOKS_SERVICE_ID) {
 
     private val walletManager = WalletManager(context)
     private val visitedPeers  = mutableListOf<Peer>()
@@ -17,7 +17,6 @@ class DeToksCommunity(
     init {
         messageHandlers[MESSAGE_TORRENT_ID] = ::onGossip
         messageHandlers[MESSAGE_TRANSACTION_ID] = ::onTransactionMessage
-
     }
 
     companion object {

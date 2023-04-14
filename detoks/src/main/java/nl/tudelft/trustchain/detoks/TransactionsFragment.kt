@@ -1,14 +1,12 @@
 package nl.tudelft.trustchain.detoks
 
 import android.app.AlertDialog
-import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.LineChart
@@ -19,33 +17,22 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import kotlinx.android.synthetic.main.test_fragment_layout.*
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.android.IPv8Android
-import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
-import nl.tudelft.ipv8.attestation.trustchain.*
-import nl.tudelft.ipv8.util.hexToBytes
 import nl.tudelft.ipv8.util.toHex
 import nl.tudelft.trustchain.common.ui.BaseFragment
 import java.math.RoundingMode
 import java.text.DecimalFormat
-import java.util.*
 import kotlin.collections.ArrayList
 
-class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransactionOnClick, confirmProposalOnClick, benchmark1000, benchmarkBasicToken1000 {
-
-    var peers: ArrayList<PeerViewModel> = arrayListOf()
-    var proposals: ArrayList<ProposalViewModel> = arrayListOf()
-    lateinit var trustchainInstance: DetoksTrustChainCommunity
-    lateinit var deToksCommunity: DeToksCommunity
-
-    var benchmarkStartTime : Long = 0
-    var currentBenchmarkIdentifier : String = ""
-    var benchmarkCounter : Int = 0
+class TransactionsFragment: BaseFragment(R.layout.test_fragment_layout) {
+    private var peers: ArrayList<PeerViewModel> = arrayListOf()
+    private lateinit var deToksCommunity: DeToksCommunity
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
         deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
         val pkTextView = publicKeyTextView
-        pkTextView.text = "My public key is: " + deToksCommunity.myPeer.key.pub().keyToBin().toHex()`
+        pkTextView.text = "My public key is: " + deToksCommunity.myPeer.key.pub().keyToBin().toHex()
 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {
@@ -54,12 +41,13 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
-        val adapter = PeerAdapter(peers, this, this, this)
+        val adapter = PeerAdapter(peers)
         peerRecyclerView.adapter = adapter
 
         Thread {
             val deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()
             if (deToksCommunity != null) {
+                println("Community ServiceID: " + deToksCommunity.serviceId)
                 while (true) {
                     Log.d("Detoks",  "Getting peers...", )
                     val peerList: List<Peer> = deToksCommunity.getPeers()
@@ -73,7 +61,7 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
 
                         }
 
-                        for (index in 0..peers.size - 1) {
+                        for (index in 0..peers.size-1) {
                             if (!peerList.contains(peers[index].peer)) {
                                 peers.removeAt(index)
                                 adapter.notifyItemRemoved(index)
@@ -399,63 +387,4 @@ class test_fragment : BaseFragment(R.layout.test_fragment_layout), singleTransac
         builder.setCanceledOnTouchOutside(true)
         builder.show()
     }
-
-    override fun onClick(recipient: Peer) {
-        println("alert: onClick called from the adapter!")
-    }
-
-    override fun confirmProposalClick(block: TrustChainBlock, adapter: ProposalAdapter) {
-        trustchainInstance.createAgreementBlock(block, mapOf<Any?, Any?>())
-        val iterator = proposals.iterator()
-        while (iterator.hasNext()) {
-            val proposal = iterator.next()
-            if (proposal.block == block) {
-                iterator.remove()
-                adapter.notifyDataSetChanged()
-            }
-        }
-        println("alert: Agreement should have been sent!")
-    }
-
-
-    // Run the benchmark, do 1000 transactions with a peer.
-    // We first generate a unique identifier for this particular instance of the benchmark. We do
-    // this to distinguish between the received agreements of different runs of the benchmark.
-    override fun runBenchmark(peer: Peer) {
-        println("========================== Running benchmark!")
-        // we generate the unique identifier as UUID...
-        val  benchmarkIdentifier: String = UUID.randomUUID().toString()
-        currentBenchmarkIdentifier = benchmarkIdentifier
-        benchmarkStartTime = System.nanoTime()
-        benchmarkCounter = 0
-
-        Thread(Runnable {
-            for (i in 0..999) {
-                var index : String = i.toString().padStart(3, '0')
-                val transaction = mapOf("message" to "benchmark$index-$benchmarkIdentifier")
-                trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
-            }
-        }).start()
-
-    }
-
-    // In this function we will send 1000 transactions to a peer using the basic token implemented by another group.
-    // The goal of this transaction for now is to just send 1000 transactions. We measure on the receiving phone as well.
-    override fun runBasicTokenBenchmark(peer: Peer) {}
-}
-
-interface singleTransactionOnClick {
-    fun onClick(recipient: Peer)
-}
-
-interface confirmProposalOnClick {
-    fun confirmProposalClick(block: TrustChainBlock, adapter: ProposalAdapter)
-}
-
-interface benchmark1000 {
-    fun runBenchmark(peer: Peer)
-}
-
-interface benchmarkBasicToken1000 {
-    fun runBasicTokenBenchmark(peer: Peer)
 }
