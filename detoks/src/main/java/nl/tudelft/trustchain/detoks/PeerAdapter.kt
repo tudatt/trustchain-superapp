@@ -20,7 +20,8 @@ class PeerAdapter (private val mList: List<PeerViewModel>) : RecyclerView.Adapte
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         println("alert: onbindviewholder")
         val peerViewModel = mList[position]
-        holder.pkView.setText(peerViewModel.peer.publicKey.keyToBin().toHex())
+        val peerPublicKey = peerViewModel.peer.publicKey.keyToBin().toHex()
+        holder.pkView.text = "Found peer with public key that ends in: " + peerPublicKey.takeLast(5)
     }
 
     override fun getItemCount(): Int {

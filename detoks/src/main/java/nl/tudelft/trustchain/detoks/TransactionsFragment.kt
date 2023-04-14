@@ -14,7 +14,7 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
-import kotlinx.android.synthetic.main.test_fragment_layout.*
+import kotlinx.android.synthetic.main.transactions_fragment_layout.*
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.util.toHex
@@ -23,7 +23,7 @@ import java.math.RoundingMode
 import java.text.DecimalFormat
 import kotlin.collections.ArrayList
 
-class TransactionsFragment: BaseFragment(R.layout.test_fragment_layout) {
+class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) {
     private var peers: ArrayList<PeerViewModel> = arrayListOf()
     private lateinit var deToksCommunity: DeToksCommunity
 
@@ -32,7 +32,8 @@ class TransactionsFragment: BaseFragment(R.layout.test_fragment_layout) {
 
         deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
         val pkTextView = publicKeyTextView
-        pkTextView.text = "My public key is: " + deToksCommunity.myPeer.key.pub().keyToBin().toHex()
+        val myPublicKey = deToksCommunity.myPeer.key.pub().keyToBin().toHex()
+        pkTextView.text = "My public key ends in: " + myPublicKey.takeLast(5)
 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {

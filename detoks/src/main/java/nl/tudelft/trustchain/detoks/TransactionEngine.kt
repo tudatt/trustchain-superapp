@@ -1,7 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
 import android.content.Context
-import android.widget.TextView
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import com.squareup.sqldelight.db.SqlDriver
 import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
@@ -11,7 +10,6 @@ import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.attestation.trustchain.BlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainBlock
 import nl.tudelft.ipv8.attestation.trustchain.UNKNOWN_SEQ
-import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockBroadcastPayload
 import nl.tudelft.ipv8.attestation.trustchain.payload.HalfBlockPayload
 import nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore
 import nl.tudelft.ipv8.keyvault.PrivateKey
@@ -20,8 +18,7 @@ import nl.tudelft.ipv8.sqldelight.Database
 import java.util.*
 import kotlin.collections.ArrayList
 import com.github.mikephil.charting.data.Entry
-import com.google.common.primitives.Bytes
-import kotlinx.android.synthetic.main.test_fragment_layout.*
+import kotlinx.android.synthetic.main.transactions_fragment_layout.*
 import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
 import nl.tudelft.ipv8.attestation.trustchain.*
 import nl.tudelft.ipv8.util.toHex
