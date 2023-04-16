@@ -38,35 +38,35 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted unsigned block creation with the same content and addresses (no storage)" />
+            android:text="non-ipv8: unencrypted unsigned block creation with the same content and addresses (no storage)" />
 
         <Button
             android:id="@+id/blockCreationRandomButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted unsigned block creation with random content and random addresses (no storage)" />
+            android:text="non-ipv8: unencrypted unsigned block creation with random content and random addresses (no storage)" />
 
         <Button
             android:id="@+id/blockCreationSignedRandomButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted signed block creation with random content and addresses (no storage)" />
+            android:text="non-ipv8: unencrypted signed block creation with random content and addresses (no storage)" />
 
         <Button
             android:id="@+id/blockCreationSignedRandomInMemoryButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted signed block creation with random content and addresses on in-memory storage" />
+            android:text="non-ipv8: unencrypted signed block creation with random content and addresses on in-memory storage" />
 
         <Button
             android:id="@+id/blockCreationSignedRandomPermanentButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted signed block creation with random content and addresses on permanent storage" />
+            android:text="non-ipv8: unencrypted signed block creation with random content and addresses on permanent storage" />
 
         <Button
             android:id="@+id/comparisonButton"
@@ -75,17 +75,17 @@
             android:text="Compare non-ipv8" />
 
         <Button
-            android:id="@+id/benchmarkButton6"
+            android:id="@+id/unencryptedRandomSignedSendIPv8Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted random IPv8" />
+            android:text="ipv8: unencrypted signed block sending with random content and addresses" />
 
         <Button
-            android:id="@+id/benchmarkButton7"
+            android:id="@+id/encryptedRandomSignedSendIPv8Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="encrypted random ipv8" />
+            android:text="ipv8: encrypted signed block sending (IPv8) with random content and addresses" />
 
         <Button
             android:id="@+id/trustchainBenchmarkButton"

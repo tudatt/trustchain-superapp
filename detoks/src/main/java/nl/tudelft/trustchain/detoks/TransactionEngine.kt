@@ -105,7 +105,7 @@ class SimpleBlockBuilder(
 
 }
 
-open class TransactionEngineBenchmark(private val txEngineUnderTest: TransactionEngine) {
+open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) {
     object MessageId {
         const val BLOCK_UNENCRYPTED = 35007
         const val BLOCK_ENCRYPTED = 350072
@@ -128,7 +128,6 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED_ECHO, ::onEncryptedEchoPacket)
     }
-    // ================================== BLOCK CREATION METHODS ===================================
     /**
      * Benchmarks parameterized block creation.
      * @param signed whether to sign the blocks or not
@@ -136,6 +135,9 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
      * @param storage the type of storage to use in order to store the blocks. Can be "permanent",
      * "in-memory" or "no-storage"
      * @param context the Context of the application
+     * @param destinationPeer the peer of the "DeToksCommunity" towards which to send the blocks. If
+     * null, then we have no IPv8 involvement (only creation of blocks)
+     * @param encrypted whether to encrypt the blocks or not (for IPv8 involvement only)
      * @param blocksPerPoint how many blocks will correspond to one point in the final graph
      * @param limit either the time limit (in milliseconds) or the total number of blocks for the
      * benchmark to run (based on [benchmarkByTime])
@@ -143,13 +145,17 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
      * specific number of blocks (both specified by [limit])
      * @return a [BenchmarkResult] instance
      */
-    fun runBenchmark(signed: Boolean,
-                     randomContent: Boolean,
-                     storage: String,
-                     context: Context,
-                     blocksPerPoint: Int,
-                     limit: Int,
-                     benchmarkByTime: Boolean): BenchmarkResult {
+    fun runBenchmark(
+        destinationPeer: Peer?,
+        randomContent: Boolean,
+        storage: String,
+        encrypted: Boolean = false,
+        context: Context,
+        blocksPerPoint: Int,
+        limit: Int,
+        benchmarkByTime: Boolean,
+        signed: Boolean
+    ): BenchmarkResult {
         val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
         val store = TrustChainSQLiteStore(Database(driver))
         val graphPoints: ArrayList<Entry> = ArrayList()
@@ -181,7 +187,15 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
                         message,
                         receiverPublicKey
                     )
-                    blockBuilder.sign()
+                    val block = blockBuilder.sign()
+                    if (destinationPeer != null) {
+                        txEngineUnderTest.sendTransaction(
+                            block,
+                            destinationPeer,
+                            encrypt = encrypted,
+                            MessageId.BLOCK_ENCRYPTED
+                        )
+                    }
                 } else {
                     val block = BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
                     if (signed) {
@@ -215,7 +229,15 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
                         message,
                         receiverPublicKey
                     )
-                    blockBuilder.sign()
+                    val block = blockBuilder.sign()
+                    if (destinationPeer != null) {
+                        txEngineUnderTest.sendTransaction(
+                            block,
+                            destinationPeer,
+                            encrypt = encrypted,
+                            MessageId.BLOCK_ENCRYPTED
+                        )
+                    }
                 } else {
                     val block = BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
                     if (signed) {
@@ -319,112 +341,6 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
             val payloadBandwith : Double = (randomMessage.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
             return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
         }
-    }
-
-    // This method can be used to benchmark the sending of signed encrypted blocks over ipv8
-    fun encryptedRandomContentSendIPv8(destinationPeer: Peer?, context: Context?, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
-        val driver: SqlDriver = if(context!=null) {
-            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
-        } else {
-            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        }
-
-        val destPeer: Peer = if(destinationPeer!=null) {
-            destinationPeer
-        } else {
-            txEngineUnderTest.myPeer
-        }
-
-        val random = Random()
-        var randomMessage = ByteArray(200)
-        var randomReceiver = ByteArray(64)
-
-        val store = TrustChainSQLiteStore(Database(driver))
-        val startTime = System.nanoTime()
-        val timePerBlock : ArrayList<Entry> = ArrayList()
-
-
-        if (time) {
-            var counter = 0
-            var previous : Long = System.nanoTime()
-            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer, store, "benchmarkTrustchainSigned",
-                    randomMessage, randomReceiver
-                )
-                blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(
-                    blockBuilder.sign(),
-                    destPeer,
-                    encrypt = true,
-                    MessageId.BLOCK_ENCRYPTED
-                )
-                counter++
-                if (counter % graphResolution == 0) {
-                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-                    previous = System.nanoTime()
-                }
-            }
-
-            val totalTime : Long = System.nanoTime() - startTime
-            val payloadBandwith : Double = (randomMessage.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
-
-        } else {
-            var previous : Long = System.nanoTime()
-            for (i in 0..numberOfBlocks) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer, store, "benchmarkTrustchainSigned",
-                    randomMessage, randomReceiver
-                )
-                blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destPeer, encrypt = true,MessageId.BLOCK_ENCRYPTED)
-                if (i % graphResolution == 0) {
-                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-                    previous = System.nanoTime()
-
-                }
-            }
-            val totalTime : Long = System.nanoTime() - startTime
-
-            val payloadBandwith : Double = (randomMessage.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
-        }
-    }
-
-    // This method can be used to benchmark the receiving of signed encrypted blocks over ipv8
-    fun encryptedRandomContentReceiveIPv8(destinationPeer: Peer, context: Context?, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
-        incomingBlockEchos.clear()
-        val startTime = System.nanoTime()
-        val timePerBlock : ArrayList<Entry> = ArrayList()
-        val res = encryptedRandomContentSendIPv8(destinationPeer, context, graphResolution, numberOfBlocks, time)
-
-        println("Waiting for 10 seconds to receive incoming blocks")
-        Thread.sleep(10000) // wait for 10 seconds
-        println("Done waiting.")
-
-        val numReceived = incomingBlockEchos.size
-
-        for (i in 0..numReceived) {
-            if (i % graphResolution == 0) {
-                timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - incomingBlockEchos[i]) / graphResolution.toFloat()))
-            }
-        }
-        val totalTime : Long = startTime - incomingBlockEchos.max()
-        val lostPackets = res.timePerBlock.size - incomingBlockEchos.size
-
-        val payloadBandwith : Double = (200 * numReceived).toDouble() / (totalTime / 1000000000).toDouble()
-        return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,lostPackets.toLong())
     }
 
     fun registerTrustChainBenchmarkListenerSigner(trustchainInstance: TrustChainCommunity, privateKey: PrivateKey) {
