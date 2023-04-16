@@ -130,7 +130,12 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
     }
     // ================================== BLOCK CREATION METHODS ===================================
     /**
-     * Benchmarks unencrypted block creation with the same content and same addresses.
+     * Benchmarks parameterized block creation.
+     * @param signed whether to sign the blocks or not
+     * @param randomContent whether the blocks contain random message and addresses or not
+     * @param storage the type of storage to use in order to store the blocks. Can be "permanent",
+     * "in-memory" or "no-storage"
+     * @param context the Context of the application
      * @param blocksPerPoint how many blocks will correspond to one point in the final graph
      * @param limit either the time limit (in milliseconds) or the total number of blocks for the
      * benchmark to run (based on [benchmarkByTime])
@@ -158,10 +163,10 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
         val startTime = System.nanoTime()
         var packetsSent: Int = limit
         val payloadBandwidth: Double
+        var previous: Long = System.nanoTime()
 
         if (benchmarkByTime) {
             var counter = 0
-            var previous: Long = System.nanoTime()
             while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
                 if (randomContent) {
                     // Generate random message and random receiver
@@ -196,7 +201,6 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
             }
             packetsSent = counter
         } else {
-            var previous : Long = System.nanoTime()
             for (i in 0..limit) {
                 if (randomContent) {
                     // Generate random message and random receiver
