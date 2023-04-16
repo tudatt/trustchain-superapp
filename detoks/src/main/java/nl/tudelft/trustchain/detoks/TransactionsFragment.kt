@@ -75,76 +75,6 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         }.start()
     }
 
-    private fun specificBenchmark(builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark) {
-        builder.setContentView(benchmarkResultView)
-        builder.show()
-        val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(R.id.benchmarkTypeTextView)
-        benchmarkTypeTextView.text = "unencrypted same content"
-        val durationCountEditText = benchmarkResultView.findViewById<EditText>(R.id.benchmarkCountDurationEditText)
-
-        val timeRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.timeRadioButton)
-        val blocksRadioButton = benchmarkResultView.findViewById<RadioButton>(R.id.blocksRadioButton)
-
-        blocksRadioButton.isChecked = true
-        val graphResolutionEditText = benchmarkResultView.findViewById<EditText>(R.id.graphResolutionEditText)
-        val runBenchmarkButton = benchmarkResultView.findViewById<Button>(R.id.runBenchmarkButton)
-
-        val totalTimeTextView = benchmarkResultView.findViewById<TextView>(R.id.totalTimeValueTextView)
-        val bandwithTextView = benchmarkResultView.findViewById<TextView>(R.id.bandwithValueTextView)
-
-        val constraintLayout = benchmarkResultView.findViewById<ConstraintLayout>(R.id.resultConstraintLayout)
-
-        constraintLayout.post(Runnable {
-            builder.window?.clearFlags(
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-            )
-        })
-
-        val lineChart = benchmarkResultView.findViewById<LineChart>(R.id.benchmarkLineChart)
-        lineChart.setTouchEnabled(true)
-        lineChart.setPinchZoom(true)
-
-        lineChart.description.text = "Days"
-        lineChart.setNoDataText("No forex yet!")
-
-        runBenchmarkButton.setOnClickListener {
-            var resolution = graphResolutionEditText.text.toString()
-            if (resolution == "") {
-                resolution = "10"
-            }
-
-            var blocksOrTime = durationCountEditText.text.toString()
-            if (blocksOrTime == "") {
-                blocksOrTime = if (timeRadioButton.isChecked) {
-                    "1"
-                } else {
-                    "1000"
-                }
-            }
-
-            val result = engineBenchmark.unencryptedBasicSameContent(
-                Integer.parseInt(resolution),
-                Integer.parseInt(blocksOrTime),
-                timeRadioButton.isChecked
-            )
-
-            val df = DecimalFormat("#.##")
-            df.roundingMode = RoundingMode.DOWN
-            val roundoff = df.format(result.payloadBandwith)
-            totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
-            bandwithTextView.text = roundoff
-
-            val dataset = LineDataSet(result.timePerBlock, "time per block")
-            dataset.setDrawValues(false)
-            dataset.lineWidth = 3f
-            lineChart.data = LineData(dataset)
-
-            lineChart.animateX(1800, Easing.EaseInExpo)
-
-        }
-    }
-
     private fun runComparisonBenchmark(builder: AlertDialog, engineBenchmark: TransactionEngineBenchmark) {
         val benchmarkComparison : View = layoutInflater.inflate(R.layout.nonipv8_benchmark_comparison, null)
         builder.setContentView(benchmarkComparison)
@@ -169,7 +99,12 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         startComparisonButton.setOnClickListener {
             for (i in 0 until blockCountList.size) {
                 println("benchmarking " + i)
-                val result = engineBenchmark.unencryptedBasicSameContent(
+
+                val result = engineBenchmark.runBenchmark(
+                    signed=false,
+                    randomContent=false,
+                    storage="no-storage",
+                    context=requireContext(),
                     100,
                     blockCountList[i],
                     false
@@ -177,16 +112,23 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                 unencryptedBasicSameContentValues.add(Entry(blockCountList[i].toFloat(), result.totalTime.toFloat()))
 
                 println("benchmarking " + i)
-                val unencryptedBasicRandomResult = engineBenchmark.unencryptedBasicRandom(
+                val unencryptedBasicRandomResult = engineBenchmark.runBenchmark(
+                    signed=false,
+                    randomContent=true,
+                    storage="no-storage",
+                    context=requireContext(),
                     100,
                     blockCountList[i],
                     false
                 )
                 unencryptedBasicRandomValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomResult.totalTime.toFloat()))
 
-
                 println("benchmarking " + i)
-                val unencryptedBasicRandomSignedResult = engineBenchmark.unencryptedRandomSigned(
+                val unencryptedBasicRandomSignedResult = engineBenchmark.runBenchmark(
+                    signed=true,
+                    randomContent=true,
+                    storage="no-storage",
+                    context=requireContext(),
                     100,
                     blockCountList[i],
                     false
@@ -194,15 +136,16 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                 unencryptedBasicRandomSignedValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomSignedResult.totalTime.toFloat()))
 
                 println("benchmarking " + i)
-                val unencryptedBasicRandomTrustchainResult = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
-                    requireContext(),
+                val unencryptedBasicRandomTrustchainResult = engineBenchmark.runBenchmark(
+                    signed=true,
+                    randomContent=true,
+                    storage="permanent",
+                    context=requireContext(),
                     100,
                     blockCountList[i],
                     false
                 )
                 unencryptedBasicRandomTrustchainValues.add(Entry(blockCountList[i].toFloat(), unencryptedBasicRandomTrustchainResult.totalTime.toFloat()))
-
-
             }
             val unencrypted = LineDataSet(unencryptedBasicSameContentValues, "unencrypted ")
             val unencryptedRandom = LineDataSet(unencryptedBasicRandomValues, "unencrypted random")
@@ -284,17 +227,47 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
             val result : BenchmarkResult
 
             when (type) {
-                "unencryptedBasicRandom" -> result = engineBenchmark.unencryptedBasicRandom(
-                    Integer.parseInt(resolution),
-                    Integer.parseInt(blocksOrTime),
-                    timeRadioButton.isChecked)
-                "unencryptedBasicRandomSigned" -> result = engineBenchmark.unencryptedRandomSigned(
+                "unencryptedBasicSame" -> result = engineBenchmark.runBenchmark(
+                    signed=false,
+                    randomContent=false,
+                    storage="no-storage",
+                    context=requireContext(),
                     Integer.parseInt(resolution),
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked
                 )
-                "unencryptedBasicRandomSignedPermanentStorage" -> result = engineBenchmark.unencryptedRandomSignedTrustchainPermanentStorage(
-                    requireContext(),
+                "unencryptedBasicRandom" -> result = engineBenchmark.runBenchmark(
+                    signed=false,
+                    randomContent=true,
+                    storage="no-storage",
+                    context=requireContext(),
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
+                "unencryptedBasicRandomSigned" -> result = engineBenchmark.runBenchmark(
+                    signed=true,
+                    randomContent=true,
+                    storage="no-storage",
+                    context=requireContext(),
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
+                "unencryptedBasicRandomSignedInMemoryStorage" -> result = engineBenchmark.runBenchmark(
+                    signed=true,
+                    randomContent=true,
+                    storage="in-memory",
+                    context=requireContext(),
+                    Integer.parseInt(resolution),
+                    Integer.parseInt(blocksOrTime),
+                    timeRadioButton.isChecked
+                )
+                "unencryptedBasicRandomSignedPermanentStorage" -> result = engineBenchmark.runBenchmark(
+                    signed=true,
+                    randomContent=true,
+                    storage="permanent",
+                    context=requireContext(),
                     Integer.parseInt(resolution),
                     Integer.parseInt(blocksOrTime),
                     timeRadioButton.isChecked
@@ -340,11 +313,18 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
     private fun showBenchmarkDialog() {
         val builder = AlertDialog.Builder(requireContext()).create()
         val view = layoutInflater.inflate(R.layout.benchmark_dialog_layout, null)
-        val button1 = view.findViewById<Button>(R.id.benchmarkButton1)
-        val button2 = view.findViewById<Button>(R.id.benchmarkButton2)
-        val button3 = view.findViewById<Button>(R.id.benchmarkButton3)
+        val blockCreationSameButton = view.findViewById<Button>(R.id.blockCreationSameButton)
+        val blockCreationRandomButton = view.findViewById<Button>(R.id.blockCreationRandomButton)
+        val blockCreationSignedRandomButton = view.findViewById<Button>(
+            R.id.blockCreationSignedRandomButton
+        )
+        val blockCreationSignedRandomInMemoryButton = view.findViewById<Button>(
+            R.id.blockCreationSignedRandomInMemoryButton
+        )
+        val blockCreationSignedRandomPermanentButton = view.findViewById<Button>(
+            R.id.blockCreationSignedRandomPermanentButton
+        )
         val comparisonButton = view.findViewById<Button>(R.id.comparisonButton)
-        val button5 = view.findViewById<Button>(R.id.benchMarkButton5)
         val button6 = view.findViewById<Button>(R.id.benchmarkButton6)
         val trustchainBenchmarkButton = view.findViewById<Button>(R.id.trustchainBenchmarkButton)
 
@@ -355,25 +335,49 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
             IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
         )
 
-        button1.setOnClickListener {
-            specificBenchmark(builder, benchmarkResultView, engineBenchmark)
+        blockCreationSameButton.setOnClickListener {
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "unencryptedBasicSame")
         }
 
-        button2.setOnClickListener {
-            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandom")
+        blockCreationRandomButton.setOnClickListener {
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "unencryptedBasicRandom")
         }
 
-        button3.setOnClickListener {
-            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSigned")
+        blockCreationSignedRandomButton.setOnClickListener {
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "unencryptedBasicRandomSigned")
+        }
+
+        blockCreationSignedRandomInMemoryButton.setOnClickListener {
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "unencryptedBasicRandomSignedInMemoryStorage")
+        }
+
+        blockCreationSignedRandomPermanentButton.setOnClickListener {
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "unencryptedBasicRandomSignedPermanentStorage")
         }
 
         comparisonButton.setOnClickListener {
             // compare all the non-ipv8 benchmarks
             runComparisonBenchmark(builder, engineBenchmark)
-        }
-
-        button5.setOnClickListener {
-            runSpecificRandomBenchmark(builder, benchmarkResultView, engineBenchmark, "unencryptedBasicRandomSignedPermanentStorage")
         }
 
         button6.setOnClickListener {

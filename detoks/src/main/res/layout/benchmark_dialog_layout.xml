@@ -34,32 +34,39 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/benchmarkButton1"
+            android:id="@+id/blockCreationSameButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted same content" />
+            android:text="unencrypted unsigned block creation with the same content and addresses (no storage)" />
 
         <Button
-            android:id="@+id/benchmarkButton2"
+            android:id="@+id/blockCreationRandomButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="unencrypted random" />
+            android:text="unencrypted unsigned block creation with random content and random addresses (no storage)" />
 
         <Button
-            android:id="@+id/benchmarkButton3"
+            android:id="@+id/blockCreationSignedRandomButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="random signed" />
+            android:text="unencrypted signed block creation with random content and addresses (no storage)" />
 
         <Button
-            android:id="@+id/benchMarkButton5"
+            android:id="@+id/blockCreationSignedRandomInMemoryButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Random signed trustchain permament" />
+            android:text="unencrypted signed block creation with random content and addresses on in-memory storage" />
+
+        <Button
+            android:id="@+id/blockCreationSignedRandomPermanentButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="unencrypted signed block creation with random content and addresses on permanent storage" />
 
         <Button
             android:id="@+id/comparisonButton"

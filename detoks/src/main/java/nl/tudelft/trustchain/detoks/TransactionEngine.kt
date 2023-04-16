@@ -138,14 +138,23 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
      * specific number of blocks (both specified by [limit])
      * @return a [BenchmarkResult] instance
      */
-    fun unencryptedBasicSameContent(blocksPerPoint: Int,
-                                    limit: Int,
-                                    benchmarkByTime: Boolean): BenchmarkResult {
+    fun runBenchmark(signed: Boolean,
+                     randomContent: Boolean,
+                     storage: String,
+                     context: Context,
+                     blocksPerPoint: Int,
+                     limit: Int,
+                     benchmarkByTime: Boolean): BenchmarkResult {
+        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
+        val store = TrustChainSQLiteStore(Database(driver))
         val graphPoints: ArrayList<Entry> = ArrayList()
         val blockType = "benchmark"
-        val message: ByteArray = "benchmarkMessage".toByteArray()
-        val senderPublicKey: ByteArray = "fakeKey".toByteArray()
-        val receiverPublicKey: ByteArray = "fakeReceiverKey".toByteArray()
+        val senderPrivateKey: PrivateKey = txEngineUnderTest.myPeer.key as PrivateKey
+        val senderPublicKey: ByteArray = txEngineUnderTest.myPeer.key.keyToBin()
+        val message = ByteArray(DetoksConfig.DEFAULT_MESSAGE_LENGTH)
+        val receiverPublicKey = ByteArray(DetoksConfig.DEFAULT_PUBLIC_KEY_LENGTH)
+        val random = Random()
+        val blockList: ArrayList<BasicBlock> = ArrayList()
         val startTime = System.nanoTime()
         var packetsSent: Int = limit
         val payloadBandwidth: Double
@@ -154,7 +163,29 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
             var counter = 0
             var previous: Long = System.nanoTime()
             while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
-                BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
+                if (randomContent) {
+                    // Generate random message and random receiver
+                    random.nextBytes(message)
+                    random.nextBytes(receiverPublicKey)
+                }
+                if (storage == "permanent") {
+                    val blockBuilder = SimpleBlockBuilder(
+                        txEngineUnderTest.myPeer,
+                        store,
+                        blockType,
+                        message,
+                        receiverPublicKey
+                    )
+                    blockBuilder.sign()
+                } else {
+                    val block = BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
+                    if (signed) {
+                        block.sign(senderPrivateKey)
+                    }
+                    if (storage == "in-memory") {
+                        blockList.add(block)
+                    }
+                }
                 counter++
                 if (counter % blocksPerPoint == 0) {
                     val x = counter.toFloat()
@@ -167,7 +198,29 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
         } else {
             var previous : Long = System.nanoTime()
             for (i in 0..limit) {
-                BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
+                if (randomContent) {
+                    // Generate random message and random receiver
+                    random.nextBytes(message)
+                    random.nextBytes(receiverPublicKey)
+                }
+                if (storage == "permanent") {
+                    val blockBuilder = SimpleBlockBuilder(
+                        txEngineUnderTest.myPeer,
+                        store,
+                        blockType,
+                        message,
+                        receiverPublicKey
+                    )
+                    blockBuilder.sign()
+                } else {
+                    val block = BasicBlock(blockType, message, senderPublicKey, receiverPublicKey)
+                    if (signed) {
+                        block.sign(senderPrivateKey)
+                    }
+                    if (storage == "in-memory") {
+                        blockList.add(block)
+                    }
+                }
                 if (i % blocksPerPoint == 0) {
                     val x = i.toFloat()
                     val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
@@ -179,247 +232,6 @@ open class TransactionEngineBenchmark(private val txEngineUnderTest: Transaction
         val totalTime: Long = System.nanoTime() - startTime
         val totalTimeSeconds: Double = (totalTime / 1000000000).toDouble()
         val totalSize: Double = (message.size*packetsSent).toDouble()
-        payloadBandwidth = totalSize / totalTimeSeconds
-        return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
-    }
-
-    /**
-     * Benchmarks unencrypted block creation with random content and random receiver addresses.
-     * @param blocksPerPoint how many blocks will correspond to one point in the final graph
-     * @param limit either the time limit (in milliseconds) or the total number of blocks for the
-     * benchmark to run (based on [benchmarkByTime])
-     * @param benchmarkByTime whether or not the benchmark will run for a specific time or for a
-     * specific number of blocks (both specified by [limit])
-     * @return a [BenchmarkResult] instance
-     */
-    fun unencryptedBasicRandom(blocksPerPoint: Int,
-                               limit: Int,
-                               benchmarkByTime: Boolean): BenchmarkResult {
-        val type = "benchmarkRandom"
-        val senderPublicKey : ByteArray = "fakeKey".toByteArray()
-
-        val startTime = System.nanoTime()
-        val graphPoints: ArrayList<Entry> = ArrayList()
-
-        val random = Random()
-        val randomMessage = ByteArray(DetoksConfig.RANDOM_MESSAGE_LENGTH)
-        val randomReceiver = ByteArray(DetoksConfig.RANDOM_PUBLIC_KEY_LENGTH)
-
-        var packetsSent: Int = limit
-        val payloadBandwidth: Double
-
-        if (benchmarkByTime) {
-            var counter = 0
-            var previous : Long = System.nanoTime()
-            while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                BasicBlock(type, randomMessage, senderPublicKey, randomReceiver)
-                counter++
-                if (counter % blocksPerPoint == 0) {
-                    val x = counter.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-            packetsSent = counter
-        } else {
-            var previous : Long = System.nanoTime()
-            for (i in 0..limit) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                BasicBlock(type, randomMessage, senderPublicKey, randomReceiver)
-                if (i % blocksPerPoint == 0) {
-                    val x = i.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-        }
-        val totalTime: Long = System.nanoTime() - startTime
-        val totalTimeSeconds: Double = (totalTime / 1000000000).toDouble()
-        val totalSize: Double = (DetoksConfig.RANDOM_MESSAGE_LENGTH*packetsSent).toDouble()
-        payloadBandwidth = totalSize / totalTimeSeconds
-        return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
-    }
-
-    /**
-     * Benchmarks unencrypted signed block creation with random content and random receiver
-     * addresses.
-     * @param blocksPerPoint how many blocks will correspond to one point in the final graph
-     * @param limit either the time limit (in milliseconds) or the total number of blocks for the
-     * benchmark to run (based on [benchmarkByTime])
-     * @param benchmarkByTime whether or not the benchmark will run for a specific time or for a
-     * specific number of blocks (both specified by [limit])
-     * @return a [BenchmarkResult] instance
-     */
-    fun unencryptedRandomSigned(blocksPerPoint: Int,
-                                limit: Int,
-                                time: Boolean): BenchmarkResult {
-        val type = "benchmarkRandomSigned"
-        val senderPrivateKey: PrivateKey = txEngineUnderTest.myPeer.key as PrivateKey
-        val senderPublicKey : ByteArray = senderPrivateKey.pub().keyToBin()
-
-        val random = Random()
-        val randomMessage = ByteArray(DetoksConfig.RANDOM_MESSAGE_LENGTH)
-        val randomReceiver = ByteArray(DetoksConfig.RANDOM_PUBLIC_KEY_LENGTH)
-
-        val startTime = System.nanoTime()
-
-        val graphPoints: ArrayList<Entry> = ArrayList()
-        var packetsSent: Int = limit
-        val payloadBandwidth: Double
-
-        if (time) {
-            var counter = 0
-            var previous: Long = System.nanoTime()
-            while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val block = BasicBlock(
-                    type,
-                    randomMessage,
-                    senderPublicKey,
-                    randomReceiver
-                )
-                block.sign(senderPrivateKey)
-                counter++
-                if (counter % blocksPerPoint == 0) {
-                    val x = counter.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-            packetsSent = counter
-        } else {
-            var previous : Long = System.nanoTime()
-            for (i in 0..limit) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val block: BasicBlock = BasicBlock(
-                    type,
-                    randomMessage,
-                    senderPublicKey,
-                    randomReceiver
-                )
-                block.sign(senderPrivateKey)
-                if (i % blocksPerPoint == 0) {
-                    val x = i.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-        }
-        val totalTime: Long = System.nanoTime() - startTime
-        val totalTimeSeconds: Double = (totalTime / 1000000000).toDouble()
-        val totalSize: Double = (DetoksConfig.RANDOM_MESSAGE_LENGTH*packetsSent).toDouble()
-        payloadBandwidth = totalSize / totalTimeSeconds
-        return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
-    }
-
-    /**
-     * Benchmarks unencrypted signed block creation with random content and random receiver
-     * addresses with permanent storage of blocks.
-     * @param context the context that describes the state of the Android application. Will be used
-     * to gain access to the Android SQLite permanent storage.
-     * @param blocksPerPoint how many blocks will correspond to one point in the final graph
-     * @param limit either the time limit (in milliseconds) or the total number of blocks for the
-     * benchmark to run (based on [benchmarkByTime])
-     * @param benchmarkByTime whether or not the benchmark will run for a specific time or for a
-     * specific number of blocks (both specified by [limit])
-     * @return a [BenchmarkResult] instance
-     */
-    fun unencryptedRandomSignedTrustchainPermanentStorage(
-        context: Context,
-        blocksPerPoint: Int,
-        limit: Int,
-        benchmarkByTime: Boolean
-    ): BenchmarkResult {
-        val driver = AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
-        val store = TrustChainSQLiteStore(Database(driver))
-
-        val random = Random()
-        val randomMessage = ByteArray(DetoksConfig.RANDOM_MESSAGE_LENGTH)
-        val randomReceiver = ByteArray(DetoksConfig.RANDOM_PUBLIC_KEY_LENGTH)
-
-        val startTime = System.nanoTime()
-
-        val graphPoints : ArrayList<Entry> = ArrayList()
-        var packetsSent = limit
-        val payloadBandwidth: Double
-
-        if (benchmarkByTime) {
-            var counter = 0
-            var previous: Long = System.nanoTime()
-            while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer,
-                    store,
-                    "benchmarkTrustchainSigned",
-                    randomMessage,
-                    randomReceiver
-                )
-                blockBuilder.sign()
-
-                counter++
-                if (counter % blocksPerPoint == 0) {
-                    val x = counter.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-            packetsSent = counter
-        } else {
-            var previous: Long = System.nanoTime()
-            for (i in 0..limit) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer,
-                    store,
-                    "benchmarkTrustchainSigned",
-                    randomMessage,
-                    randomReceiver
-                )
-                blockBuilder.sign()
-
-                if (i % blocksPerPoint == 0) {
-                    val x = i.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
-                    graphPoints.add(Entry(x, y))
-                    previous = System.nanoTime()
-                }
-            }
-        }
-
-        val totalTime: Long = System.nanoTime() - startTime
-        val totalTimeSeconds: Double = (totalTime / 1000000000).toDouble()
-        val totalSize: Double = (DetoksConfig.RANDOM_MESSAGE_LENGTH*packetsSent).toDouble()
         payloadBandwidth = totalSize / totalTimeSeconds
         return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
     }
