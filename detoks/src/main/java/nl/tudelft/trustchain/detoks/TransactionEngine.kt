@@ -1,6 +1,7 @@
 package nl.tudelft.trustchain.detoks
 
 import android.content.Context
+import android.util.Log
 import com.squareup.sqldelight.android.AndroidSqliteDriver
 import nl.tudelft.ipv8.Community
 import nl.tudelft.ipv8.Peer
@@ -23,8 +24,12 @@ import kotlin.collections.HashMap
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
-    fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int) {
-        println("sending block...")
+    fun sendTransaction(block: TrustChainBlock,
+                        peer: Peer,
+                        encrypt: Boolean = false,
+                        msgID: Int) {
+        Log.d("TransactionEngine",
+              "Creating transaction to peer with public key: " + peer.key.pub().toString())
         sendBlockToRecipient(peer, block, encrypt, msgID)
     }
 
@@ -32,11 +37,16 @@ open class TransactionEngine (override val serviceId: String): Community() {
         messageHandlers[msgIdFixer(onMessageId)] = receiver
     }
 
-    private fun sendBlockToRecipient(peer: Peer, block: TrustChainBlock, encrypt: Boolean, msgID: Int) {
+    private fun sendBlockToRecipient(peer: Peer,
+                                     block: TrustChainBlock,
+                                     encrypt: Boolean,
+                                     msgID: Int) {
         val payload = HalfBlockPayload.fromHalfBlock(block)
 
         val data = if (encrypt) {
-            serializePacket(msgID, payload, false, encrypt = true, recipient = peer, peer = myPeer)
+            serializePacket(
+                msgID, payload, false, encrypt = true, recipient = peer, peer = myPeer
+            )
         } else {
             serializePacket(msgID, payload, false, peer = myPeer)
         }
@@ -70,7 +80,8 @@ open class TransactionEngine (override val serviceId: String): Community() {
                 e.printStackTrace()
             }
         } else {
-            println("Received unknown message $msgId from $sourceAddress")
+            Log.d("TransactionEngine",
+                "Received unknown message $msgId from $sourceAddress")
         }
     }
 
@@ -256,7 +267,8 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         })
     }
 
-    private fun registerTrustChainBenchmarkAgreementListener(trustchainInstance: TrustChainCommunity) {
+    private fun registerTrustChainBenchmarkAgreementListener(
+        trustchainInstance: TrustChainCommunity) {
         trustchainInstance.addListener("benchmark_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
                 val myPublicKey = txEngineUnderTest.myPeer.key.pub().keyToBin().toHex()
@@ -264,8 +276,9 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
                     val blockIndex: Int = Integer.parseInt(
                         block.transaction["message"].toString())
                     receivedAgreementCounter++
-                    println("benchmark: received block with index: $blockIndex" +
-                            " (total received: $receivedAgreementCounter)")
+                    Log.d("TransactionEngine",
+                        "Received benchmark block: $blockIndex" +
+                             " (total received: $receivedAgreementCounter)")
                     if (trustchainSendTimeHashmap.containsKey(blockIndex)) {
                         trustchainIPv8GraphPoints.add(Entry(
                                 blockIndex.toFloat(),
@@ -274,7 +287,6 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
                         )
                     }
                     latestReceivedAgreement = System.nanoTime()
-                    println("received benchmark $blockIndex")
                 }
             }
         })
@@ -317,11 +329,25 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         val incomingTime = System.nanoTime()
         val (peer, payload) = packet.getAuthPayload(HalfBlockPayload.Deserializer)
 
-        val echoPayload = HalfBlockPayload(payload.publicKey,payload.sequenceNumber,payload.linkPublicKey,payload.linkSequenceNumber,payload.previousHash,payload.signature,payload.blockType,payload.transaction,
+        val echoPayload = HalfBlockPayload(
+            payload.publicKey,
+            payload.sequenceNumber,
+            payload.linkPublicKey,
+            payload.linkSequenceNumber,
+            payload.previousHash,
+            payload.signature,
+            payload.blockType,
+            payload.transaction,
             incomingTime.toULong()
         )
-        println("received")
-        txEngineUnderTest.sendTransaction(echoPayload.toBlock(), peer, encrypt = true,MessageId.BLOCK_ENCRYPTED_ECHO)
+        Log.d("TransactionEngine",
+            "Received packet from peer:" + peer.key.pub().toString())
+        txEngineUnderTest.sendTransaction(
+            echoPayload.toBlock(),
+            peer,
+            encrypt = true,
+            MessageId.BLOCK_ENCRYPTED_ECHO
+        )
     }
     // This method is used to track incoming encrypted block echos and store them for benchmarking
     private fun onEncryptedEchoPacket(packet: Packet) {
