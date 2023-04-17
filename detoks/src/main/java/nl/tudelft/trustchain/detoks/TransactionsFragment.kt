@@ -59,11 +59,10 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                                 peers.add(PeerViewModel(peer.publicKey.toString(), peer))
                                 adapter.notifyItemInserted(peers.size - 1)
                             }
-
                         }
 
                         for (index in 0..peers.size-1) {
-                            if (!peerList.contains(peers[index].peer)) {
+                            if (index >= 0 && index <= peers.size-1 && !peerList.contains(peers[index].peer)) {
                                 peers.removeAt(index)
                                 adapter.notifyItemRemoved(index)
                             }
@@ -320,6 +319,17 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                         signed = true
                     )
                 }
+                "trustchain" -> {
+                    val destinationPeer: Peer = if (peers.size > 0) {
+                        peers[0].peer
+                    } else {
+                        engineBenchmark.txEngineUnderTest.myPeer
+                    }
+                    result = engineBenchmark.trustchainIpv8Benchmark(
+                        destinationPeer,
+                        10000
+                    )
+                }
             }
 
             val df = DecimalFormat("#.##")
@@ -432,7 +442,11 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         }
 
         trustchainBenchmarkButton.setOnClickListener {
-
+            runSpecificRandomBenchmark(
+                builder,
+                benchmarkResultView,
+                engineBenchmark,
+                "trustchain")
         }
         builder.setCanceledOnTouchOutside(true)
         builder.show()

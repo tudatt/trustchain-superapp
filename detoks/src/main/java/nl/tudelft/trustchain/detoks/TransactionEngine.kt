@@ -16,6 +16,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 import com.github.mikephil.charting.data.Entry
 import kotlinx.android.synthetic.main.transactions_fragment_layout.*
+import nl.tudelft.ipv8.android.IPv8Android
 import nl.tudelft.ipv8.attestation.trustchain.*
 import nl.tudelft.ipv8.util.toHex
 import kotlin.collections.HashMap
@@ -279,13 +280,10 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         })
     }
 
-    fun trustchainIpv8Benchmark(trustchainInstance: TrustChainCommunity,
-                                destinationPeer: Peer,
-                                timeout: Long): BenchmarkResult {
+    fun trustchainIpv8Benchmark(destinationPeer: Peer, timeout: Long): BenchmarkResult {
         val benchmarkStartTime = System.nanoTime()
         receivedAgreementCounter = 0
-
-
+        val trustchainInstance: TrustChainCommunity = IPv8Android.getInstance().getOverlay()!!
 
         registerTrustChainBenchmarkProposalListener(trustchainInstance)
         registerTrustChainBenchmarkAgreementListener(trustchainInstance)
