@@ -2,10 +2,7 @@ package nl.tudelft.trustchain.detoks
 
 import android.content.Context
 import com.squareup.sqldelight.android.AndroidSqliteDriver
-import com.squareup.sqldelight.db.SqlDriver
-import com.squareup.sqldelight.sqlite.driver.JdbcSqliteDriver
 import nl.tudelft.ipv8.Community
-import nl.tudelft.ipv8.Overlay
 import nl.tudelft.ipv8.Peer
 import nl.tudelft.ipv8.attestation.trustchain.BlockBuilder
 import nl.tudelft.ipv8.attestation.trustchain.TrustChainBlock
@@ -19,7 +16,6 @@ import java.util.*
 import kotlin.collections.ArrayList
 import com.github.mikephil.charting.data.Entry
 import kotlinx.android.synthetic.main.transactions_fragment_layout.*
-import nl.tudelft.ipv8.android.keyvault.AndroidCryptoProvider
 import nl.tudelft.ipv8.attestation.trustchain.*
 import nl.tudelft.ipv8.util.toHex
 import kotlin.collections.HashMap
@@ -28,7 +24,7 @@ open class TransactionEngine (override val serviceId: String): Community() {
 
     fun sendTransaction(block: TrustChainBlock, peer: Peer, encrypt: Boolean = false, msgID: Int) {
         println("sending block...")
-        sendBlockToRecipient(peer, block, encrypt,msgID)
+        sendBlockToRecipient(peer, block, encrypt, msgID)
     }
 
     fun addReceiver(onMessageId: Int, receiver: (Packet) -> Unit) {
@@ -81,12 +77,6 @@ open class TransactionEngine (override val serviceId: String): Community() {
         @Suppress("DEPRECATION")
         return msgid.toChar().toByte().toInt()
     }
-
-    class Factory(private val serviceId: String) : Overlay.Factory<TransactionEngine>(TransactionEngine::class.java) {
-        override fun create(): TransactionEngine {
-            return TransactionEngine(serviceId)
-        }
-    }
 }
 
 class SimpleBlockBuilder(
@@ -102,7 +92,6 @@ class SimpleBlockBuilder(
         builder.linkPublicKey = publicKey
         builder.linkSequenceNumber = UNKNOWN_SEQ
     }
-
 }
 
 open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) {
@@ -112,24 +101,20 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         const val BLOCK_ENCRYPTED_ECHO = 3500721
     }
 
-
     private val incomingBlockEchos = mutableListOf<Long>()
-    var currentBenchmarkIdentifier : String = ""
-    var benchmarkStartTime : Long = 0
-    private val receivedAgreements : ArrayList<Pair<TrustChainBlock, Float>> = ArrayList()
-    var highestReceivedBenchmarkCounter : Int = 0
-    var benchmarkCounter : Int = 0
-    val trustchainIPv8graphData : ArrayList<Entry> = ArrayList()
+
+    var receivedAgreementCounter: Int = 0
+    val trustchainIPv8GraphPoints: ArrayList<Entry> = ArrayList()
     val trustchainSendTimeHashmap : HashMap<Int, Long> = HashMap()
     var latestReceivedAgreement : Long = 0
-
 
     init{
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED_ECHO, ::onEncryptedEchoPacket)
     }
+
     /**
-     * Benchmarks parameterized block creation.
+     * Benchmarks parameterized block creation and sending.
      * @param signed whether to sign the blocks or not
      * @param randomContent whether the blocks contain random message and addresses or not
      * @param storage the type of storage to use in order to store the blocks. Can be "permanent",
@@ -161,7 +146,7 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         val graphPoints: ArrayList<Entry> = ArrayList()
         val blockType = "benchmark"
         val senderPrivateKey: PrivateKey = txEngineUnderTest.myPeer.key as PrivateKey
-        val senderPublicKey: ByteArray = txEngineUnderTest.myPeer.key.keyToBin()
+        val senderPublicKey: ByteArray = senderPrivateKey.pub().keyToBin()
         val message = ByteArray(DetoksConfig.DEFAULT_MESSAGE_LENGTH)
         val receiverPublicKey = ByteArray(DetoksConfig.DEFAULT_PUBLIC_KEY_LENGTH)
         val random = Random()
@@ -262,128 +247,70 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
     }
 
-    // ============================== BLOCK SENDING METHODS ========================================
-
-    // This method can be used to benchmark the sending of signed unencrypted blocks over ipv8
-    fun unencryptedRandomContentSendIPv8(destinationPeer: Peer, context: Context?, graphResolution: Int, numberOfBlocks: Int, time: Boolean) : BenchmarkResult {
-        val driver: SqlDriver = if(context!=null) {
-            AndroidSqliteDriver(Database.Schema, context, "detokstrustchain.db")
-        } else {
-            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        }
-
-        val random = Random()
-        var randomMessage = ByteArray(200)
-        var randomReceiver = ByteArray(64)
-
-        val store = TrustChainSQLiteStore(Database(driver))
-        val startTime = System.nanoTime()
-        val timePerBlock : ArrayList<Entry> = ArrayList()
-
-
-        if (time) {
-            var counter = 0
-            var previous : Long = System.nanoTime()
-            while (System.nanoTime() < (startTime) + numberOfBlocks.toLong() * 1000000) {
-
-                // Generate random message and random receiver
-                random.nextBytes(randomMessage)
-                random.nextBytes(randomReceiver)
-
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer,
-                    store,
-                    "benchmarkTrustchainSigned",
-                    randomMessage,
-                    randomReceiver
-                )
-                blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(
-                    blockBuilder.sign(),
-                    destinationPeer,
-                    encrypt = false,
-                    MessageId.BLOCK_UNENCRYPTED)
-                counter++
-                if (counter % graphResolution == 0) {
-                    timePerBlock.add(Entry(counter.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-                    previous = System.nanoTime()
-                }
+    private fun registerTrustChainBenchmarkProposalListener(trustchainInstance: TrustChainCommunity) {
+        trustchainInstance.registerBlockSigner("benchmark_block", object : BlockSigner {
+            override fun onSignatureRequest(block: TrustChainBlock) {
+                trustchainInstance.createAgreementBlock(block, mapOf("message" to block.transaction["message"]))
             }
-
-            val totalTime : Long = System.nanoTime() - startTime
-            val payloadBandwith : Double = (randomMessage.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
-
-        } else {
-            var previous : Long = System.nanoTime()
-
-            // Generate random message and random receiver
-            random.nextBytes(randomMessage)
-            random.nextBytes(randomReceiver)
-
-            for (i in 0..numberOfBlocks) {
-                val blockBuilder = SimpleBlockBuilder(
-                    txEngineUnderTest.myPeer,
-                    store,
-                    "benchmarkTrustchainSigned",
-                    randomMessage, randomReceiver
-                )
-                blockBuilder.sign()
-                txEngineUnderTest.sendTransaction(blockBuilder.sign(), destinationPeer, encrypt = false,MessageId.BLOCK_UNENCRYPTED)
-                if (i % graphResolution == 0) {
-                    timePerBlock.add(Entry(i.toFloat(), (System.nanoTime() - previous) / graphResolution.toFloat()))
-                    previous = System.nanoTime()
-
-                }
-            }
-            val totalTime : Long = System.nanoTime() - startTime
-
-            val payloadBandwith : Double = (randomMessage.size * numberOfBlocks).toDouble() / (totalTime / 1000000000).toDouble()
-            return BenchmarkResult(timePerBlock, totalTime, payloadBandwith,0)
-        }
+        })
     }
 
-    fun registerTrustChainBenchmarkListenerSigner(trustchainInstance: TrustChainCommunity, privateKey: PrivateKey) {
+    private fun registerTrustChainBenchmarkAgreementListener(trustchainInstance: TrustChainCommunity) {
         trustchainInstance.addListener("benchmark_block", object : BlockListener {
             override fun onBlockReceived(block: TrustChainBlock) {
-                if (block.isAgreement && block.publicKey.toHex() !=  AndroidCryptoProvider.keyFromPrivateBin(privateKey.keyToBin()).pub().keyToBin().toHex()) {
-                    val benchmarkIndex : Int = Integer.parseInt(block.transaction["message"].toString().drop(9).take(3))
-                    println("benchmark: received $benchmarkIndex and index $benchmarkCounter")
-                    benchmarkCounter++
-                    trustchainSendTimeHashmap[benchmarkIndex]?.let { Entry(benchmarkIndex.toFloat(), it.toFloat()) }
-                        ?.let { trustchainIPv8graphData.add(it) }
-                    if (benchmarkIndex > highestReceivedBenchmarkCounter) {
-                        highestReceivedBenchmarkCounter = benchmarkIndex
+                val myPublicKey = txEngineUnderTest.myPeer.key.pub().keyToBin().toHex()
+                if (block.isAgreement && block.publicKey.toHex() != myPublicKey) {
+                    val blockIndex: Int = Integer.parseInt(
+                        block.transaction["message"].toString())
+                    receivedAgreementCounter++
+                    println("benchmark: received block with index: $blockIndex" +
+                            " (total received: $receivedAgreementCounter)")
+                    if (trustchainSendTimeHashmap.containsKey(blockIndex)) {
+                        trustchainIPv8GraphPoints.add(Entry(
+                                blockIndex.toFloat(),
+                                trustchainSendTimeHashmap[blockIndex]!!.toFloat()
+                            )
+                        )
                     }
                     latestReceivedAgreement = System.nanoTime()
-                    println("received benchmark $benchmarkIndex")
+                    println("received benchmark $blockIndex")
                 }
             }
         })
     }
 
-    fun trustchainIpv8Benchmark(trustchainInstance: TrustChainCommunity, peer: Peer, privateKey: PrivateKey, timeout: Long) : BenchmarkResult {
+    fun trustchainIpv8Benchmark(trustchainInstance: TrustChainCommunity,
+                                destinationPeer: Peer,
+                                timeout: Long): BenchmarkResult {
+        val benchmarkStartTime = System.nanoTime()
+        receivedAgreementCounter = 0
 
-        val benchmarkIdentifier: String = UUID.randomUUID().toString()
-        currentBenchmarkIdentifier = benchmarkIdentifier
-        benchmarkStartTime = System.nanoTime()
-        benchmarkCounter = 0
 
-        registerTrustChainBenchmarkListenerSigner(trustchainInstance, privateKey)
+
+        registerTrustChainBenchmarkProposalListener(trustchainInstance)
+        registerTrustChainBenchmarkAgreementListener(trustchainInstance)
 
         Thread(Runnable {
             for (i in 0..999) {
-                val index : String = i.toString().padStart(3, '0')
-                val transaction = mapOf("message" to "benchmark$index-$benchmarkIdentifier")
-                trustchainInstance.createProposalBlock("benchmark_block", transaction, peer.publicKey.keyToBin())
+                val index: String = i.toString().padStart(3, '0')
+                val transaction = mapOf("message" to "$index")
+                trustchainInstance.createProposalBlock(
+                    "benchmark_block",
+                    transaction,
+                    destinationPeer.publicKey.keyToBin()
+                )
                 trustchainSendTimeHashmap[i] = System.nanoTime()
             }
         }).start()
 
         Thread.sleep(timeout)
 
-        return BenchmarkResult(trustchainIPv8graphData,  latestReceivedAgreement - benchmarkStartTime, 0.0, 0)
-
+        return BenchmarkResult(
+            trustchainIPv8GraphPoints,
+            latestReceivedAgreement - benchmarkStartTime,
+            0.0,
+            1000 - receivedAgreementCounter
+        )
     }
 
     //========Message Handlers==========

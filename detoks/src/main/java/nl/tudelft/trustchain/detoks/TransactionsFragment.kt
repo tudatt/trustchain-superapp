@@ -432,9 +432,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         }
 
         trustchainBenchmarkButton.setOnClickListener {
-            if (peers.size > 0) {
-                println("I don't work yet")
-            }
+
         }
         builder.setCanceledOnTouchOutside(true)
         builder.show()
