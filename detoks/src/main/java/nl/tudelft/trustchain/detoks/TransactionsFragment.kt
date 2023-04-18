@@ -7,6 +7,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.*
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.LineChart
@@ -38,6 +39,11 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
         benchmarkDialogButton.setOnClickListener {
             showBenchmarkDialog()
+        }
+
+        val backButton = view.findViewById<Button>(R.id.transactions_back_button)
+        backButton.setOnClickListener {
+            Navigation.findNavController(view).navigate(R.id.action_transactions_to_detoks)
         }
 
         val peerRecyclerView = peerListView

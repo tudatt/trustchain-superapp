@@ -3,11 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/nav_graph"
     android:label="DeToks"
-    app:startDestination="@id/test_fragment_layoutid">
+    app:startDestination="@id/detoksFragment">
 
     <fragment
-        android:id="@+id/test_fragment_layoutid"
-        android:name="nl.tudelft.trustchain.detoks.TransactionsFragment"
+        android:id="@+id/detoksFragment"
+        android:name="nl.tudelft.trustchain.detoks.DeToksFragment"
         android:label="DeToks">
+        <action
+            android:id="@+id/action_detoks_to_transactions"
+            app:destination="@id/transactionsFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/transactionsFragment"
+        android:name="nl.tudelft.trustchain.detoks.TransactionsFragment"
+        android:label="TransactionsFragment" >
+        <action
+            android:id="@+id/action_transactions_to_detoks"
+            app:destination="@id/detoksFragment" />
     </fragment>
 </navigation>
