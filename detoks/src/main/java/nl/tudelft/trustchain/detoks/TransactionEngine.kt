@@ -24,6 +24,8 @@ import kotlin.collections.HashMap
 
 open class TransactionEngine (override val serviceId: String): Community() {
 
+    lateinit var trustchainInstance: TrustChainCommunity
+
     fun sendTransaction(block: TrustChainBlock,
                         peer: Peer,
                         encrypt: Boolean = false,
@@ -123,6 +125,8 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
     init{
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED, ::onEncryptedRandomIPv8Packet)
         txEngineUnderTest.addReceiver(MessageId.BLOCK_ENCRYPTED_ECHO, ::onEncryptedEchoPacket)
+        registerTrustChainBenchmarkProposalListener()
+        registerTrustChainBenchmarkAgreementListener()
     }
 
     /**
@@ -259,65 +263,86 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
         return BenchmarkResult(graphPoints, totalTime, payloadBandwidth,0)
     }
 
-    private fun registerTrustChainBenchmarkProposalListener(trustchainInstance: TrustChainCommunity) {
-        trustchainInstance.registerBlockSigner("benchmark_block", object : BlockSigner {
-            override fun onSignatureRequest(block: TrustChainBlock) {
-                trustchainInstance.createAgreementBlock(block, mapOf("message" to block.transaction["message"]))
+    private fun registerTrustChainBenchmarkProposalListener() {
+        txEngineUnderTest.trustchainInstance.registerBlockSigner(
+            "benchmark_block",
+            object: BlockSigner {
+                override fun onSignatureRequest(block: TrustChainBlock) {
+                    txEngineUnderTest.trustchainInstance.createAgreementBlock(
+                        block,
+                        mapOf("message" to block.transaction["message"])
+                    )
             }
         })
     }
 
-    private fun registerTrustChainBenchmarkAgreementListener(
-        trustchainInstance: TrustChainCommunity) {
-        trustchainInstance.addListener("benchmark_block", object : BlockListener {
-            override fun onBlockReceived(block: TrustChainBlock) {
-                val myPublicKey = txEngineUnderTest.myPeer.key.pub().keyToBin().toHex()
-                if (block.isAgreement && block.publicKey.toHex() != myPublicKey) {
-                    val blockIndex: Int = Integer.parseInt(
-                        block.transaction["message"].toString())
-                    receivedAgreementCounter++
-                    Log.d("TransactionEngine",
-                        "Received benchmark block: $blockIndex" +
-                             " (total received: $receivedAgreementCounter)")
-                    if (trustchainSendTimeHashmap.containsKey(blockIndex)) {
-                        trustchainIPv8GraphPoints.add(Entry(
-                                blockIndex.toFloat(),
-                                trustchainSendTimeHashmap[blockIndex]!!.toFloat()
+    private fun registerTrustChainBenchmarkAgreementListener() {
+        txEngineUnderTest.trustchainInstance.addListener(
+            "benchmark_block",
+            object : BlockListener {
+                override fun onBlockReceived(block: TrustChainBlock) {
+                    val myPublicKey = txEngineUnderTest.myPeer.key.pub().keyToBin().toHex()
+                    if (block.isAgreement && block.publicKey.toHex() != myPublicKey) {
+                        val blockIndex: Int = Integer.parseInt(
+                            block.transaction["message"].toString())
+                        receivedAgreementCounter++
+                        Log.d("TxEngineBenchmark",
+                            "Received benchmark agreement block: $blockIndex" +
+                                 " (total agreements received: $receivedAgreementCounter)")
+                        if (trustchainSendTimeHashmap.containsKey(blockIndex)) {
+                            trustchainIPv8GraphPoints.add(Entry(
+                                    blockIndex.toFloat(),
+                                    trustchainSendTimeHashmap[blockIndex]!!.toFloat()
+                                )
                             )
-                        )
+                        }
+                        latestReceivedAgreement = System.nanoTime()
                     }
-                    latestReceivedAgreement = System.nanoTime()
                 }
             }
-        })
+        )
     }
 
-    fun trustchainIpv8Benchmark(destinationPeer: Peer, timeout: Long): BenchmarkResult {
-        val benchmarkStartTime = System.nanoTime()
+    fun trustchainIpv8Benchmark(destinationPeer: Peer,
+                                limit: Int,
+                                benchmarkByTime: Boolean,): BenchmarkResult {
+        val startTime = System.nanoTime()
         receivedAgreementCounter = 0
-        val trustchainInstance: TrustChainCommunity = IPv8Android.getInstance().getOverlay()!!
-
-        registerTrustChainBenchmarkProposalListener(trustchainInstance)
-        registerTrustChainBenchmarkAgreementListener(trustchainInstance)
 
         Thread(Runnable {
-            for (i in 0..999) {
-                val index: String = i.toString().padStart(3, '0')
-                val transaction = mapOf("message" to "$index")
-                trustchainInstance.createProposalBlock(
-                    "benchmark_block",
-                    transaction,
-                    destinationPeer.publicKey.keyToBin()
-                )
-                trustchainSendTimeHashmap[i] = System.nanoTime()
+
+            if (benchmarkByTime) {
+                var counter = 0
+                while (System.nanoTime() < (startTime) + limit.toLong() * 1000000) {
+                    val index: String = counter.toString().padStart(3, '0')
+                    val transaction = mapOf("message" to "$index")
+                    txEngineUnderTest.trustchainInstance.createProposalBlock(
+                        "benchmark_block",
+                        transaction,
+                        destinationPeer.publicKey.keyToBin()
+                    )
+                    trustchainSendTimeHashmap[counter] = System.nanoTime()
+                    counter++
+                }
+            } else {
+                for (i in 0 until limit) {
+                    val index: String = i.toString().padStart(3, '0')
+                    val transaction = mapOf("message" to "$index")
+                    txEngineUnderTest.trustchainInstance.createProposalBlock(
+                        "benchmark_block",
+                        transaction,
+                        destinationPeer.publicKey.keyToBin()
+                    )
+                    trustchainSendTimeHashmap[i] = System.nanoTime()
+                }
             }
         }).start()
 
-        Thread.sleep(timeout)
+        Thread.sleep(10000)
 
         return BenchmarkResult(
             trustchainIPv8GraphPoints,
-            latestReceivedAgreement - benchmarkStartTime,
+            latestReceivedAgreement - startTime,
             0.0,
             1000 - receivedAgreementCounter
         )
@@ -340,7 +365,7 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
             payload.transaction,
             incomingTime.toULong()
         )
-        Log.d("TransactionEngine",
+        Log.d("TxEngineBenchmark",
             "Received packet from peer:" + peer.key.pub().toString())
         txEngineUnderTest.sendTransaction(
             echoPayload.toBlock(),

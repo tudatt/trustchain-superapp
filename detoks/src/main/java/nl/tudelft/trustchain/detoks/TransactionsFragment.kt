@@ -32,6 +32,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         super.onViewCreated(view, savedInstanceState)
 
         deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
+        deToksCommunity.trustchainInstance = IPv8Android.getInstance().getOverlay()!!
         val pkTextView = publicKeyTextView
         val myPublicKey = deToksCommunity.myPeer.key.pub().keyToBin().toHex()
         pkTextView.text = "My public key ends in: " + myPublicKey.takeLast(5)
@@ -56,7 +57,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
             if (deToksCommunity != null) {
                 println("Community ServiceID: " + deToksCommunity.serviceId)
                 while (true) {
-                    Log.d("Detoks",  "Getting peers...", )
+                    Log.d("TransactionsFragment",  "Getting peers...", )
                     val peerList: List<Peer> = deToksCommunity.getPeers()
 
                     requireActivity().runOnUiThread {
@@ -219,7 +220,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(
             R.id.benchmarkTypeTextView
         )
-        benchmarkTypeTextView.text = "unencrypted same content"
+        benchmarkTypeTextView.text = "Benchmark: $type"
         val durationCountEditText = benchmarkResultView.findViewById<EditText>(
             R.id.benchmarkCountDurationEditText
         )
@@ -375,8 +376,9 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                         engineBenchmark.txEngineUnderTest.myPeer
                     }
                     result = engineBenchmark.trustchainIpv8Benchmark(
-                        destinationPeer,
-                        10000
+                        destinationPeer = destinationPeer,
+                        limit = Integer.parseInt(blocksOrTime),
+                        benchmarkByTime = timeRadioButton.isChecked
                     )
                 }
             }
