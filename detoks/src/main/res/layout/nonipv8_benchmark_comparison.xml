@@ -23,7 +23,6 @@
         android:layout_height="300dp"
         android:layout_marginBottom="5dp"
         android:padding="9dp"
-        app:layout_constraintBottom_toTopOf="@+id/linearLayout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView3">
@@ -31,9 +30,9 @@
     </com.github.mikephil.charting.charts.LineChart>
 
     <TextView
-        android:id="@+id/textView4"
+        android:id="@+id/benchmarkStatusTextView"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="70dp"
         android:layout_margin="10dp"
         android:text="Running this benchmark can take a while, please be patient! : )"
         app:layout_constraintStart_toStartOf="parent"
@@ -46,5 +45,5 @@
         android:text="Compare"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textView4" />
+        app:layout_constraintTop_toBottomOf="@+id/benchmarkStatusTextView" />
 </androidx.constraintlayout.widget.ConstraintLayout>

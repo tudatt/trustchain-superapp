@@ -8,6 +8,7 @@ import android.view.WindowManager
 import android.widget.*
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.data.Entry
@@ -23,9 +24,13 @@ import java.math.RoundingMode
 import java.text.DecimalFormat
 import kotlin.collections.ArrayList
 
-class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) {
+class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout), choosePeerForBenchmark{
     private var peers: ArrayList<PeerViewModel> = arrayListOf()
     private lateinit var deToksCommunity: DeToksCommunity
+    private var type : String = ""
+    private lateinit var transactionEngineBenchmark : TransactionEngineBenchmark
+    private lateinit var builder: AlertDialog
+    private lateinit var benchmarkResultView: View
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -36,14 +41,16 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         pkTextView.text = "My public key ends in: " + myPublicKey.takeLast(5)
 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
-        benchmarkDialogButton.setOnClickListener {
-            showBenchmarkDialog()
-        }
+
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         val adapter = PeerAdapter(peers)
+        val peerAdapter = PeerSelectionAdapter(peers, this)
         peerRecyclerView.adapter = adapter
+        benchmarkDialogButton.setOnClickListener {
+            showBenchmarkDialog(peerAdapter)
+        }
 
         Thread {
             val deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()
@@ -58,6 +65,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                             if (!peers.contains(PeerViewModel(peer.publicKey.toString(), peer))) {
                                 peers.add(PeerViewModel(peer.publicKey.toString(), peer))
                                 adapter.notifyItemInserted(peers.size - 1)
+                                peerAdapter.notifyItemInserted(peers.size - 1)
                             }
                         }
 
@@ -82,6 +90,8 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         builder.setContentView(benchmarkComparison)
         builder.show()
 
+        val benchmarkStatusTextView = builder.findViewById<TextView>(R.id.benchmarkStatusTextView)
+
         val chart = builder.findViewById<LineChart>(R.id.benchmarkLineChart)
         chart.setTouchEnabled(true)
         chart.setPinchZoom(true)
@@ -101,106 +111,133 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         )
 
         startComparisonButton.setOnClickListener {
-            for (i in 0 until numbersOfBlocks.size) {
-                println("benchmarking " + i)
 
-                val result = engineBenchmark.runBenchmark(
-                    randomContent=false,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint = 100,
-                    limit=numbersOfBlocks[i],
-                    benchmarkByTime = false,
-                    signed=false
-                )
-                unencryptedBasicSameContentValues.add(
-                    Entry(numbersOfBlocks[i].toFloat(), result.totalTime.toFloat())
-                )
 
-                println("benchmarking " + i)
-                val unencryptedBasicRandomResult = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint = 100,
-                    limit=numbersOfBlocks[i],
-                    benchmarkByTime = false,
-                    signed=false
-                )
-                unencryptedBasicRandomValues.add(
-                    Entry(numbersOfBlocks[i].toFloat(),
-                          unencryptedBasicRandomResult.totalTime.toFloat())
-                )
+            Thread(Runnable {
+                for (i in 0 until numbersOfBlocks.size) {
+                    println("benchmarking " + i)
 
-                println("benchmarking " + i)
-                val unencryptedBasicRandomSignedResult = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint = 100,
-                    limit=numbersOfBlocks[i],
-                    benchmarkByTime = false,
-                    signed=true
-                )
-                unencryptedBasicRandomSignedValues.add(
-                    Entry(numbersOfBlocks[i].toFloat(),
-                          unencryptedBasicRandomSignedResult.totalTime.toFloat())
-                )
+                    val result = engineBenchmark.runBenchmark(
+                        randomContent=false,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint = 100,
+                        limit=numbersOfBlocks[i],
+                        benchmarkByTime = false,
+                        signed=false
+                    )
+                    unencryptedBasicSameContentValues.add(
+                        Entry(numbersOfBlocks[i].toFloat(), result.totalTime.toFloat() / 1000000)
+                    )
 
-                println("benchmarking " + i)
-                val unencryptedBasicRandomTrustchainResult = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="permanent",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint = 100,
-                    limit=numbersOfBlocks[i],
-                    benchmarkByTime = false,
-                    signed=true
-                )
-                unencryptedBasicRandomTrustchainValues.add(
-                    Entry(numbersOfBlocks[i].toFloat(),
-                          unencryptedBasicRandomTrustchainResult.totalTime.toFloat())
-                )
-            }
-            val unencrypted = LineDataSet(unencryptedBasicSameContentValues, "unencrypted ")
-            val unencryptedRandom = LineDataSet(
-                unencryptedBasicRandomValues,
-                "unencrypted random"
-            )
-            val unencryptedRandomSigned = LineDataSet(
-                unencryptedBasicRandomSignedValues,
-                "unencrypted random signed"
-            )
-            val unencryptedRandomSignedTrustchain = LineDataSet(
-                unencryptedBasicRandomTrustchainValues,
-                "unencrypted random signed TrustChain"
-            )
+                    activity?.runOnUiThread(Runnable {
+                        benchmarkStatusTextView.text = "Benchmarking creation of " + numbersOfBlocks[i].toString() + " blocks with random content and no storage"
+                    })
 
-            unencrypted.color = R.color.red
-            unencryptedRandom.color = R.color.blue
-            unencryptedRandomSigned.color = R.color.green
-            unencryptedRandomSignedTrustchain.color = R.color.colorPrimary
+                    println("benchmarking " + i)
+                    val unencryptedBasicRandomResult = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint = 100,
+                        limit=numbersOfBlocks[i],
+                        benchmarkByTime = false,
+                        signed=false
+                    )
+                    unencryptedBasicRandomValues.add(
+                        Entry(numbersOfBlocks[i].toFloat(),
+                            unencryptedBasicRandomResult.totalTime.toFloat() / 1000000)
+                    )
 
-            allLineData.add(unencrypted)
-            allLineData.add(unencryptedRandom)
-            allLineData.add(unencryptedRandomSigned)
-            allLineData.add(unencryptedRandomSignedTrustchain)
+                    activity?.runOnUiThread(Runnable {
+                        benchmarkStatusTextView.text = "Benchmarking creation of " + numbersOfBlocks[i].toString() + " blocks with random content, no storage, signed"
+                    })
 
-            val lineData = LineData(allLineData)
-            val leftYAxis = chart.axisLeft
-            leftYAxis.isEnabled = false
+                    println("benchmarking " + i)
+                    val unencryptedBasicRandomSignedResult = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint = 100,
+                        limit=numbersOfBlocks[i],
+                        benchmarkByTime = false,
+                        signed=true
+                    )
+                    unencryptedBasicRandomSignedValues.add(
+                        Entry(numbersOfBlocks[i].toFloat(),
+                            unencryptedBasicRandomSignedResult.totalTime.toFloat() / 1000000)
+                    )
 
-            val rightYAxis = chart.axisRight
-            rightYAxis.isEnabled = false
+                    activity?.runOnUiThread(Runnable {
+                        benchmarkStatusTextView.text = "Benchmarking creation of " + numbersOfBlocks[i].toString() +  " blocks with random content, permanent storage, signed"
+                    })
 
-            chart.legend.isWordWrapEnabled = true
+                    println("benchmarking " + i)
+                    val unencryptedBasicRandomTrustchainResult = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="permanent",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint = 100,
+                        limit=numbersOfBlocks[i],
+                        benchmarkByTime = false,
+                        signed=true
+                    )
+                    unencryptedBasicRandomTrustchainValues.add(
+                        Entry(numbersOfBlocks[i].toFloat(),
+                            unencryptedBasicRandomTrustchainResult.totalTime.toFloat() / 1000000)
+                    )
 
-            chart.data = lineData
-            chart.animateXY(1800, 1800, Easing.EaseInExpo)
+                    activity?.runOnUiThread(Runnable {
+                        benchmarkStatusTextView.text = "Benchmarking creation of " + numbersOfBlocks[i].toString() +  " trustchain blocks"
+                    })
+                }
+
+                activity?.runOnUiThread(Runnable {
+                    benchmarkStatusTextView.text = ""
+                    val unencrypted = LineDataSet(unencryptedBasicSameContentValues, "unencrypted ")
+                    val unencryptedRandom = LineDataSet(
+                        unencryptedBasicRandomValues,
+                        "unencrypted random"
+                    )
+                    val unencryptedRandomSigned = LineDataSet(
+                        unencryptedBasicRandomSignedValues,
+                        "unencrypted random signed"
+                    )
+                    val unencryptedRandomSignedTrustchain = LineDataSet(
+                        unencryptedBasicRandomTrustchainValues,
+                        "unencrypted random signed TrustChain"
+                    )
+
+                    unencrypted.color = R.color.red
+                    unencryptedRandom.color = R.color.blue
+                    unencryptedRandomSigned.color = R.color.green
+                    unencryptedRandomSignedTrustchain.color = R.color.colorPrimary
+
+                    allLineData.add(unencrypted)
+                    allLineData.add(unencryptedRandom)
+                    allLineData.add(unencryptedRandomSigned)
+                    allLineData.add(unencryptedRandomSignedTrustchain)
+
+                    val lineData = LineData(allLineData)
+                    val leftYAxis = chart.axisLeft
+                    leftYAxis.isEnabled = false
+
+                    val rightYAxis = chart.axisRight
+                    rightYAxis.isEnabled = false
+
+                    chart.legend.isWordWrapEnabled = true
+
+                    chart.data = lineData
+                    chart.animateXY(1800, 1800, Easing.EaseInExpo)
+                })
+
+            }).start()
+
+
         }
     }
 
@@ -213,7 +250,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(
             R.id.benchmarkTypeTextView
         )
-        benchmarkTypeTextView.text = "unencrypted same content"
+        benchmarkTypeTextView.text = type
         val durationCountEditText = benchmarkResultView.findViewById<EditText>(
             R.id.benchmarkCountDurationEditText
         )
@@ -274,41 +311,31 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                 ArrayList(), 0, 0.0, 0
             )
 
-            when (type) {
-                "unencryptedBasicSame" -> result = engineBenchmark.runBenchmark(
-                    randomContent=false,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=false
-                )
-                "unencryptedBasicRandom" -> result = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=false
-                )
-                "unencryptedBasicRandomSigned" -> result = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=true
-                )
-                "unencryptedBasicRandomSignedInMemoryStorage" ->
-                    result = engineBenchmark.runBenchmark(
+            Thread(Runnable{
+                when (type) {
+                    "unencryptedBasicSame" -> result = engineBenchmark.runBenchmark(
+                        randomContent=false,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=false
+                    )
+                    "unencryptedBasicRandom" -> result = engineBenchmark.runBenchmark(
                         randomContent=true,
-                        storage="in-memory",
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=false
+                    )
+                    "unencryptedBasicRandomSigned" -> result = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="no-storage",
                         destinationPeer=null,
                         context=requireContext(),
                         blocksPerPoint=Integer.parseInt(resolution),
@@ -316,84 +343,97 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
                         benchmarkByTime=timeRadioButton.isChecked,
                         signed=true
                     )
-                "unencryptedBasicRandomSignedPermanentStorage" ->
-                    result = engineBenchmark.runBenchmark(
-                        randomContent=true,
-                        storage="permanent",
-                        destinationPeer=null,
-                        context=requireContext(),
-                        blocksPerPoint=Integer.parseInt(resolution),
-                        limit=Integer.parseInt(blocksOrTime),
-                        benchmarkByTime=timeRadioButton.isChecked,
-                        signed=true
-                    )
-                "unencryptedRandomSignedSendIPv8" -> {
-                    val destinationPeer: Peer = if (peers.size > 0) {
-                        peers[0].peer
-                    } else {
-                        engineBenchmark.txEngineUnderTest.myPeer
+                    "unencryptedBasicRandomSignedInMemoryStorage" ->
+                        result = engineBenchmark.runBenchmark(
+                            randomContent=true,
+                            storage="in-memory",
+                            destinationPeer=null,
+                            context=requireContext(),
+                            blocksPerPoint=Integer.parseInt(resolution),
+                            limit=Integer.parseInt(blocksOrTime),
+                            benchmarkByTime=timeRadioButton.isChecked,
+                            signed=true
+                        )
+                    "unencryptedBasicRandomSignedPermanentStorage" ->
+                        result = engineBenchmark.runBenchmark(
+                            randomContent=true,
+                            storage="permanent",
+                            destinationPeer=null,
+                            context=requireContext(),
+                            blocksPerPoint=Integer.parseInt(resolution),
+                            limit=Integer.parseInt(blocksOrTime),
+                            benchmarkByTime=timeRadioButton.isChecked,
+                            signed=true
+                        )
+                    "unencryptedRandomSignedSendIPv8" -> {
+                        val destinationPeer: Peer = if (peers.size > 0) {
+                            peers[0].peer
+                        } else {
+                            engineBenchmark.txEngineUnderTest.myPeer
+                        }
+                        result = engineBenchmark.runBenchmark(
+                            randomContent = true,
+                            storage = "permanent",
+                            destinationPeer = destinationPeer,
+                            context = requireContext(),
+                            blocksPerPoint = Integer.parseInt(resolution),
+                            limit = Integer.parseInt(blocksOrTime),
+                            benchmarkByTime = timeRadioButton.isChecked,
+                            signed = true
+                        )
                     }
-                    result = engineBenchmark.runBenchmark(
-                        randomContent = true,
-                        storage = "permanent",
-                        destinationPeer = destinationPeer,
-                        context = requireContext(),
-                        blocksPerPoint = Integer.parseInt(resolution),
-                        limit = Integer.parseInt(blocksOrTime),
-                        benchmarkByTime = timeRadioButton.isChecked,
-                        signed = true
-                    )
-                }
-                "encryptedRandomSignedSendIPv8" -> {
-                    val destinationPeer: Peer = if (peers.size > 0) {
-                        peers[0].peer
-                    } else {
-                        engineBenchmark.txEngineUnderTest.myPeer
+                    "encryptedRandomSignedSendIPv8" -> {
+                        val destinationPeer: Peer = if (peers.size > 0) {
+                            peers[0].peer
+                        } else {
+                            engineBenchmark.txEngineUnderTest.myPeer
+                        }
+                        result = engineBenchmark.runBenchmark(
+                            randomContent = true,
+                            storage = "permanent",
+                            encrypted = true,
+                            destinationPeer = destinationPeer,
+                            context = requireContext(),
+                            blocksPerPoint = Integer.parseInt(resolution),
+                            limit = Integer.parseInt(blocksOrTime),
+                            benchmarkByTime = timeRadioButton.isChecked,
+                            signed = true
+                        )
                     }
-                    result = engineBenchmark.runBenchmark(
-                        randomContent = true,
-                        storage = "permanent",
-                        encrypted = true,
-                        destinationPeer = destinationPeer,
-                        context = requireContext(),
-                        blocksPerPoint = Integer.parseInt(resolution),
-                        limit = Integer.parseInt(blocksOrTime),
-                        benchmarkByTime = timeRadioButton.isChecked,
-                        signed = true
-                    )
-                }
-                "trustchain" -> {
-                    val destinationPeer: Peer = if (peers.size > 0) {
-                        peers[0].peer
-                    } else {
-                        engineBenchmark.txEngineUnderTest.myPeer
+                    "trustchain" -> {
+
+                        val destinationPeer: Peer = if (peers.size > 0) {
+                            peers[0].peer
+                        } else {
+                            engineBenchmark.txEngineUnderTest.myPeer
+                        }
+                        result = engineBenchmark.trustchainIpv8Benchmark(
+                            destinationPeer,
+                            10000
+                        )
                     }
-                    result = engineBenchmark.trustchainIpv8Benchmark(
-                        destinationPeer,
-                        10000
-                    )
                 }
-            }
 
-            val df = DecimalFormat("#.##")
-            df.roundingMode = RoundingMode.DOWN
-            val roundoff = df.format(result.payloadBandwith)
-            totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
-            bandwithTextView.text = roundoff
+                val df = DecimalFormat("#.##")
+                df.roundingMode = RoundingMode.DOWN
+                val roundoff = df.format(result.payloadBandwith)
+                totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
+                bandwithTextView.text = roundoff
 
-            val dataset = LineDataSet(result.timePerBlock, "time per block")
-            dataset.setDrawValues(false)
-            dataset.lineWidth = 3f
-            lineChart.data = LineData(dataset)
+                val dataset = LineDataSet(result.timePerBlock, "time per block")
+                dataset.setDrawValues(false)
+                dataset.lineWidth = 3f
+                lineChart.data = LineData(dataset)
 
-            lineChart.animateX(1800, Easing.EaseInExpo)
+                lineChart.animateX(1800, Easing.EaseInExpo)
+            }).start()
         }
     }
 
     /**
      * Runs when the user hits the "BENCHMARK" button.
      */
-    private fun showBenchmarkDialog() {
+    private fun showBenchmarkDialog(peerAdapter: PeerSelectionAdapter) {
         val builder = AlertDialog.Builder(requireContext()).create()
         val view = layoutInflater.inflate(R.layout.benchmark_dialog_layout, null)
         val blockCreationSameButton = view.findViewById<Button>(R.id.blockCreationSameButton)
@@ -472,29 +512,86 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout) 
         }
 
         unencryptedRandomSignedSendIPv8Button.setOnClickListener {
-            runBenchmarkWithType(
-                builder,
-                benchmarkResultView,
-                engineBenchmark,
-                "unencryptedRandomSignedSendIPv8")
+            showPeerSelectionDialog(builder, engineBenchmark, peerAdapter, "unencryptedRandomSignedSendIPv8", benchmarkResultView)
+//
+//            runBenchmarkWithType(
+//                builder,
+//                benchmarkResultView,
+//                engineBenchmark,
+//                "unencryptedRandomSignedSendIPv8")
         }
 
         encryptedRandomSignedSendIPv8Button.setOnClickListener {
-            runBenchmarkWithType(
-                builder,
-                benchmarkResultView,
-                engineBenchmark,
-                "encryptedRandomSignedSendIPv8")
+            showPeerSelectionDialog(builder, engineBenchmark, peerAdapter, "encryptedRandomSignedSendIPv8", benchmarkResultView)
+//            runBenchmarkWithType(
+//                builder,
+//                benchmarkResultView,
+//                engineBenchmark,
+//                "encryptedRandomSignedSendIPv8")
         }
 
         trustchainBenchmarkButton.setOnClickListener {
-            runBenchmarkWithType(
-                builder,
-                benchmarkResultView,
-                engineBenchmark,
-                "trustchain")
+            showPeerSelectionDialog(builder, engineBenchmark, peerAdapter, "trustchain", benchmarkResultView)
+
+//            runBenchmarkWithType(
+//                builder,
+//                benchmarkResultView,
+//                engineBenchmark,
+//                "trustchain")
         }
         builder.setCanceledOnTouchOutside(true)
         builder.show()
     }
+
+
+
+    private fun showPeerSelectionDialog(bBuilder: AlertDialog,
+                                        engineBenchmark: TransactionEngineBenchmark, peerAdapter: PeerSelectionAdapter, bType: String, bBenchmarkResultView: View) {
+        println(engineBenchmark.txEngineUnderTest.myPeer.key)
+        var view : View = layoutInflater.inflate(R.layout.select_peer_for_benchmark_layout, null)
+        bBuilder.setContentView(view)
+        var peerRecycler = view.findViewById<RecyclerView>(R.id.peerSelectionRecyclerView)
+        peerRecycler.layoutManager = LinearLayoutManager(requireContext())
+//        val peerAdapter = PeerSelectionAdapter(peers, this)
+        peerRecycler.adapter = peerAdapter
+        type = bType
+        transactionEngineBenchmark = engineBenchmark
+        benchmarkResultView = bBenchmarkResultView
+        builder = bBuilder
+        builder.show()
+
+
+    }
+
+    override fun choicePeer(peer: Peer, builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark, type: String) {
+        runBenchmarkWithType(builder, benchmarkResultView, engineBenchmark, type)
+    }
+
+    override fun getIPv8BenchmarkType(): String {
+        return this.type
+    }
+
+    override fun getEngineBenchmark(): TransactionEngineBenchmark {
+        return this.transactionEngineBenchmark
+    }
+
+    override fun getBuilder() : AlertDialog {
+        return this.builder
+    }
+
+    override fun getResultView(): View {
+        return this.benchmarkResultView
+    }
+
+}
+
+interface choosePeerForBenchmark {
+    fun choicePeer(peer: Peer, builder: AlertDialog, benchmarkResultView: View, engineBenchmark: TransactionEngineBenchmark, type: String)
+    fun getIPv8BenchmarkType() : String
+
+    fun getEngineBenchmark() : TransactionEngineBenchmark
+
+    fun getBuilder() : AlertDialog
+
+    fun getResultView(): View
 }

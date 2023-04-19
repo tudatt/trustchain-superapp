@@ -1,5 +1,6 @@
 package nl.tudelft.trustchain.detoks
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.text.Layout
 import android.view.LayoutInflater
@@ -17,11 +18,12 @@ class PeerAdapter (private val mList: List<PeerViewModel>) : RecyclerView.Adapte
         return ViewHolder(view)
     }
 
+    @SuppressLint("SetTextI18n")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         println("alert: onbindviewholder")
         val peerViewModel = mList[position]
         val peerPublicKey = peerViewModel.peer.publicKey.keyToBin().toHex()
-        holder.pkView.text = "Found peer with public key that ends in: " + peerPublicKey.takeLast(5)
+        holder.pkView.text = "..." + peerPublicKey.takeLast(5)
     }
 
     override fun getItemCount(): Int {
