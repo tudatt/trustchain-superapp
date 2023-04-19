@@ -7,6 +7,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.*
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.mikephil.charting.animation.Easing
@@ -36,12 +37,18 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         super.onViewCreated(view, savedInstanceState)
 
         deToksCommunity = IPv8Android.getInstance().getOverlay<DeToksCommunity>()!!
+        deToksCommunity.trustchainInstance = IPv8Android.getInstance().getOverlay()!!
         val pkTextView = publicKeyTextView
         val myPublicKey = deToksCommunity.myPeer.key.pub().keyToBin().toHex()
         pkTextView.text = "My public key ends in: " + myPublicKey.takeLast(5)
 
         val benchmarkDialogButton = view.findViewById<Button>(R.id.benchmark_window_button)
 
+
+        val backButton = view.findViewById<Button>(R.id.transactions_back_button)
+        backButton.setOnClickListener {
+            Navigation.findNavController(view).navigate(R.id.action_transactions_to_detoks)
+        }
 
         val peerRecyclerView = peerListView
         peerRecyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -57,7 +64,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
             if (deToksCommunity != null) {
                 println("Community ServiceID: " + deToksCommunity.serviceId)
                 while (true) {
-                    Log.d("Detoks",  "Getting peers...", )
+                    Log.d("TransactionsFragment",  "Getting peers...", )
                     val peerList: List<Peer> = deToksCommunity.getPeers()
 
                     requireActivity().runOnUiThread {
@@ -250,7 +257,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(
             R.id.benchmarkTypeTextView
         )
-        benchmarkTypeTextView.text = type
+        benchmarkTypeTextView.text = "Benchmark: $type"
         val durationCountEditText = benchmarkResultView.findViewById<EditText>(
             R.id.benchmarkCountDurationEditText
         )
@@ -413,6 +420,107 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                         )
                     }
                 }
+            when (type) {
+                "unencryptedBasicSame" -> result = engineBenchmark.runBenchmark(
+                    randomContent=false,
+                    storage="no-storage",
+                    destinationPeer=null,
+                    context=requireContext(),
+                    blocksPerPoint=Integer.parseInt(resolution),
+                    limit=Integer.parseInt(blocksOrTime),
+                    benchmarkByTime=timeRadioButton.isChecked,
+                    signed=false
+                )
+                "unencryptedBasicRandom" -> result = engineBenchmark.runBenchmark(
+                    randomContent=true,
+                    storage="no-storage",
+                    destinationPeer=null,
+                    context=requireContext(),
+                    blocksPerPoint=Integer.parseInt(resolution),
+                    limit=Integer.parseInt(blocksOrTime),
+                    benchmarkByTime=timeRadioButton.isChecked,
+                    signed=false
+                )
+                "unencryptedBasicRandomSigned" -> result = engineBenchmark.runBenchmark(
+                    randomContent=true,
+                    storage="no-storage",
+                    destinationPeer=null,
+                    context=requireContext(),
+                    blocksPerPoint=Integer.parseInt(resolution),
+                    limit=Integer.parseInt(blocksOrTime),
+                    benchmarkByTime=timeRadioButton.isChecked,
+                    signed=true
+                )
+                "unencryptedBasicRandomSignedInMemoryStorage" ->
+                    result = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="in-memory",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=true
+                    )
+                "unencryptedBasicRandomSignedPermanentStorage" ->
+                    result = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="permanent",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=true
+                    )
+                "unencryptedRandomSignedSendIPv8" -> {
+                    val destinationPeer: Peer = if (peers.size > 0) {
+                        peers[0].peer
+                    } else {
+                        engineBenchmark.txEngineUnderTest.myPeer
+                    }
+                    result = engineBenchmark.runBenchmark(
+                        randomContent = true,
+                        storage = "permanent",
+                        destinationPeer = destinationPeer,
+                        context = requireContext(),
+                        blocksPerPoint = Integer.parseInt(resolution),
+                        limit = Integer.parseInt(blocksOrTime),
+                        benchmarkByTime = timeRadioButton.isChecked,
+                        signed = true
+                    )
+                }
+                "encryptedRandomSignedSendIPv8" -> {
+                    val destinationPeer: Peer = if (peers.size > 0) {
+                        peers[0].peer
+                    } else {
+                        engineBenchmark.txEngineUnderTest.myPeer
+                    }
+                    result = engineBenchmark.runBenchmark(
+                        randomContent = true,
+                        storage = "permanent",
+                        encrypted = true,
+                        destinationPeer = destinationPeer,
+                        context = requireContext(),
+                        blocksPerPoint = Integer.parseInt(resolution),
+                        limit = Integer.parseInt(blocksOrTime),
+                        benchmarkByTime = timeRadioButton.isChecked,
+                        signed = true
+                    )
+                }
+                "trustchain" -> {
+                    val destinationPeer: Peer = if (peers.size > 0) {
+                        peers[0].peer
+                    } else {
+                        engineBenchmark.txEngineUnderTest.myPeer
+                    }
+                    result = engineBenchmark.trustchainIpv8Benchmark(
+                        destinationPeer = destinationPeer,
+                        limit = Integer.parseInt(blocksOrTime),
+                        benchmarkByTime = timeRadioButton.isChecked
+                    )
+                }
+            }
 
                 val df = DecimalFormat("#.##")
                 df.roundingMode = RoundingMode.DOWN
