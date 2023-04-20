@@ -14,13 +14,12 @@ import nl.tudelft.ipv8.util.toHex
 
 class PeerAdapter (private val mList: List<PeerViewModel>) : RecyclerView.Adapter<PeerAdapter.ViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.discovered_peer_item, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.discovered_peer_plain, parent, false)
         return ViewHolder(view)
     }
 
     @SuppressLint("SetTextI18n")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        println("alert: onbindviewholder")
         val peerViewModel = mList[position]
         val peerPublicKey = peerViewModel.peer.publicKey.keyToBin().toHex()
         holder.pkView.text = "..." + peerPublicKey.takeLast(5)
@@ -31,6 +30,6 @@ class PeerAdapter (private val mList: List<PeerViewModel>) : RecyclerView.Adapte
     }
 
     class ViewHolder(itemView : View) : RecyclerView.ViewHolder(itemView) {
-        var pkView : TextView = itemView.findViewById(R.id.pkTextview)
+        var pkView : TextView = itemView.findViewById(R.id.pkTextview2)
     }
 }
