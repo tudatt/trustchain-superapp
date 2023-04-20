@@ -318,9 +318,13 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                 }
             }
             if (Integer.parseInt(blocksOrTime) <= 0) {
-                Snackbar.make(benchmarkResultView, "This number needs to be greater than 0.", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(benchmarkResultView, "Number of blocks or time must be greater than 0.", Snackbar.LENGTH_LONG).show()
                 return@setOnClickListener
             }
+             if (Integer.parseInt(resolution) <= 0) {
+                 Snackbar.make(benchmarkResultView, "Graph resolution must be greater than 0.", Snackbar.LENGTH_LONG).show()
+                 return@setOnClickListener
+             }
 
             // Initialize our BenchmarkResult with a dumb value
             var result = BenchmarkResult(
