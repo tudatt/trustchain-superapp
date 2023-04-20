@@ -154,8 +154,8 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
     private val incomingBlockEchos = mutableListOf<Long>()
 
     var receivedAgreementCounter: Int = 0
-    val trustchainIPv8GraphPoints: ArrayList<Entry> = ArrayList()
-    val trustchainSendTimeHashmap : HashMap<Int, Long> = HashMap()
+    var trustchainIPv8GraphPoints: ArrayList<Entry> = ArrayList()
+    var trustchainSendTimeHashmap : HashMap<Int, Long> = HashMap()
     var latestReceivedAgreement : Long = 0
 
     init{
@@ -245,7 +245,7 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
                 counter++
                 if (counter % blocksPerPoint == 0) {
                     val x = counter.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
+                    val y = (System.nanoTime() - previous) / (blocksPerPoint.toFloat() * 1000000)
                     graphPoints.add(Entry(x, y))
                     previous = System.nanoTime()
                 }
@@ -286,7 +286,7 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
                 }
                 if (i % blocksPerPoint == 0) {
                     val x = i.toFloat()
-                    val y = (System.nanoTime() - previous) / blocksPerPoint.toFloat()
+                    val y = (System.nanoTime() - previous) / (blocksPerPoint.toFloat() * 1000000)
                     graphPoints.add(Entry(x, y))
                     previous = System.nanoTime()
                 }
@@ -328,9 +328,11 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
                         if (trustchainSendTimeHashmap.containsKey(blockIndex)) {
                             trustchainIPv8GraphPoints.add(Entry(
                                     blockIndex.toFloat(),
-                                    trustchainSendTimeHashmap[blockIndex]!!.toFloat()
+                                (System.nanoTime() - trustchainSendTimeHashmap[blockIndex]!!).toFloat() / 1000000
                                 )
                             )
+                            println("x: " + blockIndex.toFloat().toString())
+                            println("y: " + (System.nanoTime() - trustchainSendTimeHashmap[blockIndex]!! - 15000000).toFloat())
                         }
                         latestReceivedAgreement = System.nanoTime()
                     }
@@ -374,12 +376,14 @@ open class TransactionEngineBenchmark(val txEngineUnderTest: TransactionEngine) 
             }
         }).start()
 
-        Thread.sleep(10000)
-
+        Thread.sleep(60000)
+        var points = ArrayList(trustchainIPv8GraphPoints.sortedWith(compareBy { it.x }))
+        trustchainSendTimeHashmap = HashMap()
+        trustchainIPv8GraphPoints = ArrayList()
         return BenchmarkResult(
-            trustchainIPv8GraphPoints,
+            points,
             latestReceivedAgreement - startTime,
-            0.0,
+            (DetoksConfig.DEFAULT_MESSAGE_LENGTH*points.size).toDouble() / (latestReceivedAgreement - startTime / 1000000000).toDouble(),
             1000 - receivedAgreementCounter
         )
     }

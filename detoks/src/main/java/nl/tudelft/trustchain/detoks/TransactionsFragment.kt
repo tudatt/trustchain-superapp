@@ -301,7 +301,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         lineChart.setTouchEnabled(true)
         lineChart.setPinchZoom(true)
 
-        lineChart.description.text = "Days"
+        lineChart.description.text = "Time"
         lineChart.setNoDataText("Waiting for benchmark data")
 
         runBenchmarkButton.setOnClickListener {
