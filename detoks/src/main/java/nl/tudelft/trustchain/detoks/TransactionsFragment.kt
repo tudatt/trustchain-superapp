@@ -425,15 +425,19 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                 val df = DecimalFormat("#.##")
                 df.roundingMode = RoundingMode.DOWN
                 val roundoff = df.format(result.payloadBandwith)
-                totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
-                bandwithTextView.text = roundoff
+                activity?.runOnUiThread {
+                    totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
+                    bandwithTextView.text = roundoff
+                    val dataset = LineDataSet(result.timePerBlock, "time per block")
+                    dataset.setDrawValues(false)
+                    dataset.lineWidth = 3f
+                    lineChart.data = LineData(dataset)
 
-                val dataset = LineDataSet(result.timePerBlock, "time per block")
-                dataset.setDrawValues(false)
-                dataset.lineWidth = 3f
-                lineChart.data = LineData(dataset)
+                    lineChart.animateX(1800, Easing.EaseInExpo)
+                }
 
-                lineChart.animateX(1800, Easing.EaseInExpo)
+
+
             }).start()
         }
     }
