@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import nl.tudelft.ipv8.util.toHex
 
 class PeerSelectionAdapter (private val mList: List<PeerViewModel>, val choosePeer: choosePeerForBenchmark) : RecyclerView.Adapter<PeerSelectionAdapter.ViewHolder>(){
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -20,7 +21,7 @@ class PeerSelectionAdapter (private val mList: List<PeerViewModel>, val choosePe
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         var pkView : TextView = holder.pkView
         var peerButton : Button = holder.selectPeerButton
-        pkView.text = mList[position].peerPublicKey.takeLast(5)
+        pkView.text = mList[position].peer.publicKey.keyToBin().toHex().takeLast(5)
         peerButton.setOnClickListener {
             choosePeer.choicePeer(mList[position].peer, choosePeer.getBuilder(), choosePeer.getResultView(), choosePeer.getEngineBenchmark(), choosePeer.getIPv8BenchmarkType())
         }
