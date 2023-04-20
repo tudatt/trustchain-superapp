@@ -2,6 +2,7 @@ package nl.tudelft.trustchain.detoks
 
 import android.app.AlertDialog
 import android.os.Bundle
+import android.os.Debug
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -334,37 +335,51 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
             Thread(Runnable{
 
             when (type) {
-                "unencryptedBasicSame" -> result = engineBenchmark.runBenchmark(
-                    randomContent=false,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=false
-                )
-                "unencryptedBasicRandom" -> result = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=false
-                )
-                "unencryptedBasicRandomSigned" -> result = engineBenchmark.runBenchmark(
-                    randomContent=true,
-                    storage="no-storage",
-                    destinationPeer=null,
-                    context=requireContext(),
-                    blocksPerPoint=Integer.parseInt(resolution),
-                    limit=Integer.parseInt(blocksOrTime),
-                    benchmarkByTime=timeRadioButton.isChecked,
-                    signed=true
-                )
+                "unencryptedBasicSame" -> {
+                    Debug.startMethodTracing("final-unencryptedBasicSame", 1024*128*128)
+                    result = engineBenchmark.runBenchmark(
+                        randomContent=false,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=false
+                    )
+                    Debug.stopMethodTracing()
+                }
+                "unencryptedBasicRandom" -> {
+                    Debug.startMethodTracing("final-unencryptedBasicRandom", 1024*128*128)
+                    result = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=false
+                    )
+                    Debug.stopMethodTracing()
+                }
+                "unencryptedBasicRandomSigned" -> {
+                    Debug.startMethodTracing("final-unencryptedBasicRandomSigned", 1024*128*128)
+                    result = engineBenchmark.runBenchmark(
+                        randomContent=true,
+                        storage="no-storage",
+                        destinationPeer=null,
+                        context=requireContext(),
+                        blocksPerPoint=Integer.parseInt(resolution),
+                        limit=Integer.parseInt(blocksOrTime),
+                        benchmarkByTime=timeRadioButton.isChecked,
+                        signed=true
+                    )
+                    Debug.stopMethodTracing()
+                }
                 "unencryptedBasicRandomSignedInMemoryStorage" ->
+                {
+                    Debug.startMethodTracing("final-unencryptedBasicRandomSignedInMemoryStorage", 1024*128*128)
                     result = engineBenchmark.runBenchmark(
                         randomContent=true,
                         storage="in-memory",
@@ -375,7 +390,11 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                         benchmarkByTime=timeRadioButton.isChecked,
                         signed=true
                     )
+                    Debug.stopMethodTracing()
+                }
                 "unencryptedBasicRandomSignedPermanentStorage" ->
+                {
+                    Debug.startMethodTracing("final-unencryptedBasicRandomSignedPermanentStorage", 1024*128*128)
                     result = engineBenchmark.runBenchmark(
                         randomContent=true,
                         storage="permanent",
@@ -386,12 +405,15 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                         benchmarkByTime=timeRadioButton.isChecked,
                         signed=true
                     )
+                    Debug.stopMethodTracing()
+                }
                 "unencryptedRandomSignedSendIPv8" -> {
                     val destinationPeer: Peer = if (peers.size > 0) {
                         peers[0].peer
                     } else {
                         engineBenchmark.txEngineUnderTest.myPeer
                     }
+                    Debug.startMethodTracing("final-unencryptedRandomSignedSendIPv8", 1024*128*128)
                     result = engineBenchmark.runBenchmark(
                         randomContent = true,
                         storage = "permanent",
@@ -402,6 +424,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                         benchmarkByTime = timeRadioButton.isChecked,
                         signed = true
                     )
+                    Debug.stopMethodTracing()
                 }
                 "encryptedRandomSignedSendIPv8" -> {
                     val destinationPeer: Peer = if (peers.size > 0) {
@@ -409,6 +432,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                     } else {
                         engineBenchmark.txEngineUnderTest.myPeer
                     }
+                    Debug.startMethodTracing("final-encryptedRandomSignedSendIPv8", 1024*128*128)
                     result = engineBenchmark.runBenchmark(
                         randomContent = true,
                         storage = "permanent",
@@ -420,6 +444,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                         benchmarkByTime = timeRadioButton.isChecked,
                         signed = true
                     )
+                    Debug.stopMethodTracing()
                 }
                 "trustchain" -> {
                     val destinationPeer: Peer = if (peers.size > 0) {
@@ -427,11 +452,13 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                     } else {
                         engineBenchmark.txEngineUnderTest.myPeer
                     }
+                    Debug.startMethodTracing("final-trustchain", 1024*128*128)
                     result = engineBenchmark.trustchainIpv8Benchmark(
                         destinationPeer = destinationPeer,
                         limit = Integer.parseInt(blocksOrTime),
                         benchmarkByTime = timeRadioButton.isChecked
                     )
+                    Debug.stopMethodTracing()
                 }
             }
 

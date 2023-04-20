@@ -55,6 +55,60 @@ Zooming into the actual mechanism of QR-Codes (Creative Commons CC0 license - sh
 
 ![Demo](eurotoken/images/demo.gif)
 
+
+### Transaction engine Detoks:  
+
+in this section of the README, we will elaborate on the performance of the different transaction functions that were developed, analysing the bottlenecks by using Brendan's Gregg tool - flamegraphs. Below, the different functions :   
+ * creating unencrypted Basic Same Content blocks  
+ * creating unencrypted Basic Random Content blocks  
+ * creating unenctypted Basic Random Content Signed blocks  
+ * creating unencrpyted Basic Random Content Signed blocks with permament storage  
+ * sending encrypted Random Content blocks through IPv8  
+
+ Let us look at the different flamegraphs and identify the bottlenecks:  
+ 
+##### creating unencrypted Basic Same Content blocks  
+  speed : 20 to 50 microseconds  
+
+we can  see in the flamegraph below that this function is mostly bottlenecked by internal class generation, but nothing major  
+![flamegraph](detoks/images/basic-same-content.svg)  
+
+
+##### creating unencrypted Basic Random Content blocks
+
+speed: range 30 to 50 microseconds    
+here, we can see that the function is bottlenecked mostly by the "random" filling of the content. this could be further optimized by changing the random generation to a more optimized function for pseudo-random generation, like reading random bytes from a file.    
+![flamegraph](detoks/images/basic-random-content.svg)   
+
+##### creating unencrpyted Basic Random Content Signed blocks  
+
+speed: range 50 to 100 microseconds   
+doesn't change much than from the non-signed block, the biggest bottleneck stays the "random aspect"   
+![flamegraph](detoks/images/random-content-signed.svg)   
+
+##### creating random signed that are permanently stored   
+
+here we finally see some difference.  
+the speed is in the range 300 to 600 microseconds (large increase).  
+we can see in the flamegraph below that the bottleneck here are the function linked to trustchain. First, the building of the block by TrustchainBuilder, which corresponds to about 25% of the runtime. Furthermore, the storing on the trustchain takes up 42% of the runtime. This makes sense, and there isn't much to be optimized here except eventually taking a deep down down the implementation of the trustchain core to see if there are any sub-optimal functions  
+
+![flamegraph](detoks/images/permanent-storage.svg)   
+
+##### sending encrypted Random Content blocks through IPv8   
+
+this is the end result in which we are most interested in, as it's the "final boss" of the different functions we have implemented.    
+the runtime is in the range 400 - 800 microseconds.  this would allow for a theoretical ~1400 blocks sent per second, which is above the desired target for this course's scope. 
+Similar to the permanently stored block, the principal bottleneck resides in the block generation and signature. Additionaly, the block sending through ipv8 adds an additional delay which corresponds to about 20% of the total runtime, explaining the increase in runtime compared to the simple block creation.  
+Below: the flamegraph: 
+![flamegraph](detoks/images/ipv8.svg)
+
+
+
+
+
+
+
+
 ### Debug
 
 **Debug** shows various information related to connectivity, including:

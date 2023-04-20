@@ -1,0 +1,1565 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="374" onload="init(evt)" viewBox="0 0 1200 374" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="374.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >Thread-15</text>
+<text id="details" x="10.00" y="357" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="357" > </text>
+<g id="frames">
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (44 microseconds, 0.12%)</title><rect x="264.1" y="181" width="1.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="267.09" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#get (14,904 microseconds, 41.21%)</title><rect x="323.2" y="117" width="486.3" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="326.22" y="127.5" >kotlin.reflect.jvm.internal.pcollections.IntTreePMap#get</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (11 microseconds, 0.03%)</title><rect x="1038.0" y="133" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1041.01" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.String#length (24 microseconds, 0.07%)</title><rect x="48.4" y="213" width="0.8" height="15.0" fill="rgb(236,104,34)" rx="2" ry="2" />
+<text  x="51.44" y="223.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriverKt#access$getDEFAULT_CACHE_SIZE$p (14 microseconds, 0.04%)</title><rect x="192.4" y="197" width="0.5" height="15.0" fill="rgb(241,149,40)" rx="2" ry="2" />
+<text  x="195.40" y="207.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImpl#&lt;init&gt; (4,863 microseconds, 13.45%)</title><rect x="995.9" y="181" width="158.7" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="998.95" y="191.5" >nl.tudelft.ipv8.sqld..</text>
+</g>
+<g >
+<title>java.util.HashMap#&lt;init&gt; (146 microseconds, 0.40%)</title><rect x="152.6" y="117" width="4.8" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="155.59" y="127.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Callback#&lt;init&gt; (38 microseconds, 0.11%)</title><rect x="172.5" y="165" width="1.2" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="175.50" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Integer#parseInt (348 microseconds, 0.96%)</title><rect x="37.9" y="229" width="11.3" height="15.0" fill="rgb(243,104,42)" rx="2" ry="2" />
+<text  x="40.87" y="239.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (12 microseconds, 0.03%)</title><rect x="298.1" y="149" width="0.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="301.06" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.String#length (358 microseconds, 0.99%)</title><rect x="241.2" y="181" width="11.7" height="15.0" fill="rgb(236,104,34)" rx="2" ry="2" />
+<text  x="244.22" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#size (12 microseconds, 0.03%)</title><rect x="986.7" y="133" width="0.4" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="989.71" y="143.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration$Builder#name (14 microseconds, 0.04%)</title><rect x="140.5" y="181" width="0.4" height="15.0" fill="rgb(241,161,40)" rx="2" ry="2" />
+<text  x="143.45" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#keyIndexIn (128 microseconds, 0.35%)</title><rect x="863.6" y="133" width="4.1" height="15.0" fill="rgb(247,143,46)" rx="2" ry="2" />
+<text  x="866.57" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Math#min (15 microseconds, 0.04%)</title><rect x="187.5" y="149" width="0.5" height="15.0" fill="rgb(247,104,46)" rx="2" ry="2" />
+<text  x="190.54" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#getEntries (14,936 microseconds, 41.30%)</title><rect x="322.2" y="133" width="487.3" height="15.0" fill="rgb(237,143,36)" rx="2" ry="2" />
+<text  x="325.17" y="143.5" >kotlin.reflect.jvm.internal.pcollections.HashPMap#getEntries</text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImpl$Schema#getVersion (15 microseconds, 0.04%)</title><rect x="176.0" y="165" width="0.4" height="15.0" fill="rgb(247,152,46)" rx="2" ry="2" />
+<text  x="178.96" y="175.5" ></text>
+</g>
+<g >
+<title>libcore.util.CharsetUtils#toAsciiBytes (15 microseconds, 0.04%)</title><rect x="253.4" y="181" width="0.4" height="15.0" fill="rgb(238,129,36)" rx="2" ry="2" />
+<text  x="256.35" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KClassCacheKt#getOrCreateKotlinClass (21,382 microseconds, 59.13%)</title><rect x="273.7" y="165" width="697.7" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="276.68" y="175.5" >kotlin.reflect.jvm.internal.KClassCacheKt#getOrCreateKotlinClass</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (12 microseconds, 0.03%)</title><rect x="265.5" y="197" width="0.4" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="268.53" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KClassImpl#&lt;init&gt; (420 microseconds, 1.16%)</title><rect x="298.4" y="149" width="13.8" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="301.45" y="159.5" ></text>
+</g>
+<g >
+<title>com.github.mikephil.charting.data.Entry#&lt;clinit&gt; (209 microseconds, 0.58%)</title><rect x="117.8" y="213" width="6.9" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="120.84" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (311 microseconds, 0.86%)</title><rect x="853.4" y="101" width="10.2" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="856.42" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (18 microseconds, 0.05%)</title><rect x="877.4" y="53" width="0.6" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="880.44" y="63.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (10,530 microseconds, 29.12%)</title><rect x="465.9" y="101" width="343.6" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="468.94" y="111.5" >kotlin.reflect.jvm.internal.pcollections.IntTr..</text>
+</g>
+<g >
+<title>com.squareup.sqldelight.TransacterImpl#&lt;init&gt; (57 microseconds, 0.16%)</title><rect x="997.8" y="165" width="1.9" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="1000.84" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#&lt;init&gt; (43 microseconds, 0.12%)</title><rect x="844.1" y="133" width="1.4" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="847.06" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="842.7" y="101" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="845.72" y="111.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#newCapacity (36 microseconds, 0.10%)</title><rect x="208.6" y="149" width="1.1" height="15.0" fill="rgb(240,104,38)" rx="2" ry="2" />
+<text  x="211.55" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (22 microseconds, 0.06%)</title><rect x="1164.0" y="197" width="0.7" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1166.99" y="207.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration#&lt;init&gt; (33 microseconds, 0.09%)</title><rect x="139.0" y="165" width="1.0" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="141.95" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#getEntries (201 microseconds, 0.56%)</title><rect x="987.1" y="133" width="6.6" height="15.0" fill="rgb(237,143,36)" rx="2" ry="2" />
+<text  x="990.11" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#&lt;init&gt; (60 microseconds, 0.17%)</title><rect x="841.3" y="117" width="1.9" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="844.25" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Thread#run (36,163 microseconds, 100.00%)</title><rect x="10.0" y="309" width="1180.0" height="15.0" fill="rgb(243,104,41)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" >java.lang.Thread#run</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (15 microseconds, 0.04%)</title><rect x="302.3" y="133" width="0.5" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="305.27" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.String#charAt (67 microseconds, 0.19%)</title><rect x="46.3" y="213" width="2.1" height="15.0" fill="rgb(229,104,26)" rx="2" ry="2" />
+<text  x="49.25" y="223.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver#&lt;init&gt; (646 microseconds, 1.79%)</title><rect x="144.3" y="181" width="21.1" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="147.31" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (11 microseconds, 0.03%)</title><rect x="1037.7" y="133" width="0.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1040.65" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#get (483 microseconds, 1.34%)</title><rect x="847.8" y="117" width="15.8" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="850.81" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#minus (352 microseconds, 0.97%)</title><rect x="828.9" y="133" width="11.5" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="831.95" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.System#nanoTime (25 microseconds, 0.07%)</title><rect x="215.3" y="197" width="0.9" height="15.0" fill="rgb(236,104,34)" rx="2" ry="2" />
+<text  x="218.34" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.MapEntry#equals (140 microseconds, 0.39%)</title><rect x="835.9" y="101" width="4.5" height="15.0" fill="rgb(235,143,33)" rx="2" ry="2" />
+<text  x="838.87" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (13 microseconds, 0.04%)</title><rect x="151.3" y="133" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="154.26" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.WeakReference#&lt;init&gt; (472 microseconds, 1.31%)</title><rect x="281.6" y="149" width="15.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="284.61" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.atomic.AtomicLong#get (11 microseconds, 0.03%)</title><rect x="223.0" y="181" width="0.4" height="15.0" fill="rgb(237,104,35)" rx="2" ry="2" />
+<text  x="226.04" y="191.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration#builder (60 microseconds, 0.17%)</title><rect x="136.2" y="181" width="2.0" height="15.0" fill="rgb(243,161,41)" rx="2" ry="2" />
+<text  x="139.21" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Reflection#getOrCreateKotlinClass (568 microseconds, 1.57%)</title><rect x="975.1" y="197" width="18.6" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="978.13" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (11 microseconds, 0.03%)</title><rect x="137.8" y="149" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="140.81" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (11 microseconds, 0.03%)</title><rect x="1005.6" y="133" width="0.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1008.58" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#minus (167 microseconds, 0.46%)</title><rect x="835.0" y="117" width="5.4" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="837.99" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#getClass (30 microseconds, 0.08%)</title><rect x="183.8" y="165" width="0.9" height="15.0" fill="rgb(240,104,38)" rx="2" ry="2" />
+<text  x="186.75" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (19 microseconds, 0.05%)</title><rect x="1186.8" y="197" width="0.6" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1189.77" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="173.3" y="149" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="176.35" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack$Itr#next (16 microseconds, 0.04%)</title><rect x="834.5" y="101" width="0.5" height="15.0" fill="rgb(230,143,27)" rx="2" ry="2" />
+<text  x="837.46" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Class#getComponentType (13 microseconds, 0.04%)</title><rect x="187.1" y="149" width="0.4" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="190.12" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.System#arraycopy (17 microseconds, 0.05%)</title><rect x="213.3" y="117" width="0.6" height="15.0" fill="rgb(248,104,48)" rx="2" ry="2" />
+<text  x="216.32" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Class#getName (13 microseconds, 0.04%)</title><rect x="279.4" y="149" width="0.5" height="15.0" fill="rgb(241,104,40)" rx="2" ry="2" />
+<text  x="282.43" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (37 microseconds, 0.10%)</title><rect x="808.3" y="85" width="1.2" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="811.33" y="95.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#&lt;init&gt; (56 microseconds, 0.15%)</title><rect x="886.8" y="101" width="1.8" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="889.77" y="111.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.ReflectProperties#lazy (114 microseconds, 0.32%)</title><rect x="308.4" y="133" width="3.8" height="15.0" fill="rgb(251,143,51)" rx="2" ry="2" />
+<text  x="311.43" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.collections.ArraysKt___ArraysJvmKt#plus (358 microseconds, 0.99%)</title><rect x="253.8" y="197" width="11.7" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="256.84" y="207.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver$database$2#&lt;init&gt; (68 microseconds, 0.19%)</title><rect x="146.9" y="165" width="2.2" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="149.85" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.System#arraycopy (14 microseconds, 0.04%)</title><rect x="188.0" y="149" width="0.5" height="15.0" fill="rgb(248,104,48)" rx="2" ry="2" />
+<text  x="191.03" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (128 microseconds, 0.35%)</title><rect x="1017.6" y="117" width="4.1" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1020.55" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNull (11 microseconds, 0.03%)</title><rect x="229.4" y="213" width="0.3" height="15.0" fill="rgb(224,143,21)" rx="2" ry="2" />
+<text  x="232.37" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#size (34 microseconds, 0.09%)</title><rect x="321.1" y="133" width="1.1" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="324.06" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (174 microseconds, 0.48%)</title><rect x="857.9" y="85" width="5.7" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="860.89" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#getReferent (11 microseconds, 0.03%)</title><rect x="981.3" y="133" width="0.4" height="15.0" fill="rgb(241,104,39)" rx="2" ry="2" />
+<text  x="984.33" y="143.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.internal.FunctionsJvmKt#copyOnWriteList (3,539 microseconds, 9.79%)</title><rect x="1038.4" y="149" width="115.4" height="15.0" fill="rgb(232,149,30)" rx="2" ry="2" />
+<text  x="1041.37" y="159.5" >com.squareup.s..</text>
+</g>
+<g >
+<title>java.util.Random#&lt;init&gt; (163 microseconds, 0.45%)</title><rect x="216.2" y="197" width="5.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="219.16" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.Class#getName (18 microseconds, 0.05%)</title><rect x="979.9" y="149" width="0.6" height="15.0" fill="rgb(241,104,40)" rx="2" ry="2" />
+<text  x="982.93" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.SynchronizedLazyImpl#&lt;init&gt; (90 microseconds, 0.25%)</title><rect x="162.0" y="149" width="3.0" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="165.02" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.Arrays#copyOf (127 microseconds, 0.35%)</title><rect x="209.7" y="149" width="4.2" height="15.0" fill="rgb(248,104,47)" rx="2" ry="2" />
+<text  x="212.73" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (11 microseconds, 0.03%)</title><rect x="834.1" y="69" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="837.10" y="79.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.MapEntry#&lt;init&gt; (2,537 microseconds, 7.02%)</title><rect x="888.6" y="133" width="82.8" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="891.60" y="143.5" >kotlin.re..</text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver#&lt;init&gt; (1,101 microseconds, 3.04%)</title><rect x="131.0" y="197" width="35.9" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="133.99" y="207.5" >com..</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#areEqual (183 microseconds, 0.51%)</title><rect x="223.4" y="213" width="6.0" height="15.0" fill="rgb(224,143,21)" rx="2" ry="2" />
+<text  x="226.40" y="223.5" ></text>
+</g>
+<g >
+<title>java.util.AbstractList#&lt;init&gt; (197 microseconds, 0.54%)</title><rect x="198.5" y="197" width="6.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="201.47" y="207.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.TransactionsFragment#$r8$lambda$GVU6wJeOjuTm8h1yg1-OokmLDZM (36,163 microseconds, 100.00%)</title><rect x="10.0" y="277" width="1180.0" height="15.0" fill="rgb(235,152,33)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >nl.tudelft.trustchain.detoks.TransactionsFragment#$r8$lambda$GVU6wJeOjuTm8h1yg1-OokmLDZM</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (14 microseconds, 0.04%)</title><rect x="974.7" y="197" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="977.67" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (13 microseconds, 0.04%)</title><rect x="155.7" y="85" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="158.66" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.Integer#parseInt (393 microseconds, 1.09%)</title><rect x="36.4" y="245" width="12.8" height="15.0" fill="rgb(243,104,42)" rx="2" ry="2" />
+<text  x="39.40" y="255.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.ReflectionFactoryImpl#getOrCreateKotlinClass (541 microseconds, 1.50%)</title><rect x="976.0" y="181" width="17.7" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="979.01" y="191.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#add (275 microseconds, 0.76%)</title><rect x="204.9" y="213" width="9.0" height="15.0" fill="rgb(253,104,53)" rx="2" ry="2" />
+<text  x="207.90" y="223.5" ></text>
+</g>
+<g >
+<title>java.util.Random#&lt;init&gt; (292 microseconds, 0.81%)</title><rect x="213.9" y="213" width="9.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="216.87" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (149 microseconds, 0.41%)</title><rect x="988.8" y="101" width="4.9" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="991.80" y="111.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#get (147 microseconds, 0.41%)</title><rect x="830.2" y="117" width="4.8" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="833.19" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (12 microseconds, 0.03%)</title><rect x="866.7" y="117" width="0.4" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="869.70" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="124.3" y="181" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="127.27" y="191.5" ></text>
+</g>
+<g >
+<title>libcore.util.CharsetUtils#toUtf8Bytes (26 microseconds, 0.07%)</title><rect x="1171.0" y="181" width="0.9" height="15.0" fill="rgb(238,129,36)" rx="2" ry="2" />
+<text  x="1174.01" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KClassImpl$data$1#&lt;init&gt; (119 microseconds, 0.33%)</title><rect x="302.8" y="133" width="3.8" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="305.76" y="143.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.CopyOnWriteArrayList#setArray (272 microseconds, 0.75%)</title><rect x="1145.0" y="117" width="8.8" height="15.0" fill="rgb(239,104,37)" rx="2" ry="2" />
+<text  x="1147.97" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#plus (100 microseconds, 0.28%)</title><rect x="874.8" y="85" width="3.2" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="877.76" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (11 microseconds, 0.03%)</title><rect x="139.7" y="149" width="0.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="142.67" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#equals (11 microseconds, 0.03%)</title><rect x="982.4" y="133" width="0.4" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="985.44" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#&lt;init&gt; (46 microseconds, 0.13%)</title><rect x="883.8" y="69" width="1.5" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="886.77" y="79.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (39 microseconds, 0.11%)</title><rect x="269.2" y="181" width="1.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="272.25" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (37 microseconds, 0.10%)</title><rect x="992.5" y="85" width="1.2" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="995.46" y="95.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.Peer#getKey (12 microseconds, 0.03%)</title><rect x="231.1" y="213" width="0.4" height="15.0" fill="rgb(248,152,48)" rx="2" ry="2" />
+<text  x="234.07" y="223.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#&lt;init&gt; (64 microseconds, 0.18%)</title><rect x="294.9" y="117" width="2.1" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="297.93" y="127.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#&lt;init&gt; (243 microseconds, 0.67%)</title><rect x="197.0" y="213" width="7.9" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="199.97" y="223.5" ></text>
+</g>
+<g >
+<title>android.util.LruCache#&lt;init&gt; (228 microseconds, 0.63%)</title><rect x="149.9" y="149" width="7.5" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="152.92" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Math#max (12 microseconds, 0.03%)</title><rect x="209.3" y="133" width="0.4" height="15.0" fill="rgb(244,104,43)" rx="2" ry="2" />
+<text  x="212.34" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (26 microseconds, 0.07%)</title><rect x="143.5" y="149" width="0.8" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="146.46" y="159.5" ></text>
+</g>
+<g >
+<title>com.github.mikephil.charting.data.BaseEntry#&lt;init&gt; (39 microseconds, 0.11%)</title><rect x="125.4" y="197" width="1.3" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="128.45" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (24 microseconds, 0.07%)</title><rect x="1153.8" y="149" width="0.8" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1156.85" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#grow (225 microseconds, 0.62%)</title><rect x="206.5" y="181" width="7.4" height="15.0" fill="rgb(234,104,31)" rx="2" ry="2" />
+<text  x="209.53" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#iterator (89 microseconds, 0.25%)</title><rect x="831.6" y="101" width="2.9" height="15.0" fill="rgb(241,143,39)" rx="2" ry="2" />
+<text  x="834.56" y="111.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (80 microseconds, 0.22%)</title><rect x="1187.4" y="197" width="2.6" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1190.39" y="207.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.TransacterImpl#&lt;init&gt; (60 microseconds, 0.17%)</title><rect x="1004.0" y="149" width="1.9" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="1006.98" y="159.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory#create (89 microseconds, 0.25%)</title><rect x="141.4" y="181" width="2.9" height="15.0" fill="rgb(245,161,45)" rx="2" ry="2" />
+<text  x="144.40" y="191.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DbBlockQueriesImpl#&lt;init&gt; (3,993 microseconds, 11.04%)</title><rect x="1024.3" y="165" width="130.3" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="1027.34" y="175.5" >nl.tudelft.ipv8...</text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (35 microseconds, 0.10%)</title><rect x="305.5" y="101" width="1.1" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="308.50" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.System#nanoTime (126 microseconds, 0.35%)</title><rect x="192.9" y="213" width="4.1" height="15.0" fill="rgb(236,104,34)" rx="2" ry="2" />
+<text  x="195.86" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (18 microseconds, 0.05%)</title><rect x="863.0" y="69" width="0.6" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="865.98" y="79.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#grow (202 microseconds, 0.56%)</title><rect x="207.3" y="165" width="6.6" height="15.0" fill="rgb(234,104,31)" rx="2" ry="2" />
+<text  x="210.28" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (393 microseconds, 1.09%)</title><rect x="1172.6" y="197" width="12.8" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1175.58" y="207.5" ></text>
+</g>
+<g >
+<title>java.util.AbstractMap#&lt;init&gt; (40 microseconds, 0.11%)</title><rect x="154.8" y="101" width="1.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="157.78" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (517 microseconds, 1.43%)</title><rect x="1128.1" y="117" width="16.9" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1131.10" y="127.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.keyvault.LibNaClSK#pub (141 microseconds, 0.39%)</title><rect x="265.9" y="213" width="4.6" height="15.0" fill="rgb(230,152,28)" rx="2" ry="2" />
+<text  x="268.92" y="223.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#getClass (20 microseconds, 0.06%)</title><rect x="218.5" y="181" width="0.7" height="15.0" fill="rgb(240,104,38)" rx="2" ry="2" />
+<text  x="221.51" y="191.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.BasicBlock#&lt;init&gt; (943 microseconds, 2.61%)</title><rect x="1154.6" y="213" width="30.8" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="1157.63" y="223.5" >nl..</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#plus (639 microseconds, 1.77%)</title><rect x="867.7" y="133" width="20.9" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="870.75" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (14 microseconds, 0.04%)</title><rect x="311.7" y="85" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="314.70" y="95.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.keyvault.LibNaClPK#&lt;init&gt; (116 microseconds, 0.32%)</title><rect x="266.7" y="197" width="3.8" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="269.73" y="207.5" ></text>
+</g>
+<g >
+<title>dalvik.system.VMDebug#startMethodTracingFilename (730 microseconds, 2.02%)</title><rect x="12.6" y="245" width="23.8" height="15.0" fill="rgb(241,184,40)" rx="2" ry="2" />
+<text  x="15.58" y="255.5" >d..</text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver#&lt;init&gt; (2,027 microseconds, 5.61%)</title><rect x="126.7" y="213" width="66.2" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="129.72" y="223.5" >com.squ..</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Reflection#getOrCreateKotlinClass (21,439 microseconds, 59.28%)</title><rect x="271.8" y="197" width="699.6" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="274.82" y="207.5" >kotlin.jvm.internal.Reflection#getOrCreateKotlinClass</text>
+</g>
+<g >
+<title>java.nio.charset.Charset#name (14 microseconds, 0.04%)</title><rect x="252.9" y="181" width="0.5" height="15.0" fill="rgb(241,104,40)" rx="2" ry="2" />
+<text  x="255.90" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#plus (490 microseconds, 1.35%)</title><rect x="869.3" y="117" width="16.0" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="872.28" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Character#digit (37 microseconds, 0.10%)</title><rect x="45.0" y="197" width="1.3" height="15.0" fill="rgb(233,104,30)" rx="2" ry="2" />
+<text  x="48.04" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Lambda#&lt;init&gt; (40 microseconds, 0.11%)</title><rect x="147.8" y="149" width="1.3" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="150.76" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.atomic.AtomicInteger#getAndAdd (13 microseconds, 0.04%)</title><rect x="160.2" y="133" width="0.4" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="163.20" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#get (306 microseconds, 0.85%)</title><rect x="983.7" y="149" width="10.0" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="986.68" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="159.0" y="149" width="0.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="161.96" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.atomic.AtomicLong#&lt;init&gt; (58 microseconds, 0.16%)</title><rect x="219.6" y="181" width="1.9" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="222.58" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (11 microseconds, 0.03%)</title><rect x="49.2" y="245" width="0.4" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="52.22" y="255.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration$Builder#&lt;init&gt; (35 microseconds, 0.10%)</title><rect x="137.0" y="165" width="1.2" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="140.03" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#withRoot (102 microseconds, 0.28%)</title><rect x="885.3" y="117" width="3.3" height="15.0" fill="rgb(241,143,39)" rx="2" ry="2" />
+<text  x="888.27" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (14 microseconds, 0.04%)</title><rect x="191.9" y="181" width="0.5" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="194.95" y="191.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DbAttestationQueriesImpl#&lt;init&gt; (745 microseconds, 2.06%)</title><rect x="1000.0" y="165" width="24.3" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="1003.03" y="175.5" >n..</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#plus (4,960 microseconds, 13.72%)</title><rect x="809.5" y="149" width="161.9" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="812.53" y="159.5" >kotlin.reflect.jvm.i..</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack$Itr#&lt;init&gt; (38 microseconds, 0.11%)</title><rect x="833.2" y="85" width="1.3" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="836.22" y="95.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.BenchmarkResult#&lt;init&gt; (141 microseconds, 0.39%)</title><rect x="1185.4" y="213" width="4.6" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="1188.40" y="223.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.keyvault.LibNaClPK#keyToBin (950 microseconds, 2.63%)</title><rect x="234.9" y="213" width="31.0" height="15.0" fill="rgb(244,152,43)" rx="2" ry="2" />
+<text  x="237.92" y="223.5" >nl..</text>
+</g>
+<g >
+<title>java.lang.Number#&lt;init&gt; (35 microseconds, 0.10%)</title><rect x="220.3" y="165" width="1.2" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="223.33" y="175.5" ></text>
+</g>
+<g >
+<title>androidx.fragment.app.Fragment#getContext (37 microseconds, 0.10%)</title><rect x="11.4" y="229" width="1.2" height="15.0" fill="rgb(230,161,27)" rx="2" ry="2" />
+<text  x="14.37" y="239.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#subList (14 microseconds, 0.04%)</title><rect x="832.8" y="85" width="0.4" height="15.0" fill="rgb(232,143,30)" rx="2" ry="2" />
+<text  x="835.77" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#equals (15 microseconds, 0.04%)</title><rect x="839.5" y="85" width="0.4" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="842.46" y="95.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (12 microseconds, 0.03%)</title><rect x="233.4" y="197" width="0.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="236.35" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.String#hashCode (33 microseconds, 0.09%)</title><rect x="827.9" y="133" width="1.0" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="830.87" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#get (36 microseconds, 0.10%)</title><rect x="980.5" y="149" width="1.2" height="15.0" fill="rgb(237,104,35)" rx="2" ry="2" />
+<text  x="983.52" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (10 microseconds, 0.03%)</title><rect x="999.7" y="165" width="0.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1002.70" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (14 microseconds, 0.04%)</title><rect x="130.5" y="181" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="133.54" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#&lt;init&gt; (50 microseconds, 0.14%)</title><rect x="876.4" y="69" width="1.6" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="879.39" y="79.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KDeclarationContainerImpl#&lt;init&gt; (55 microseconds, 0.15%)</title><rect x="306.6" y="133" width="1.8" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="309.64" y="143.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration$Builder#build (57 microseconds, 0.16%)</title><rect x="138.2" y="181" width="1.8" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="141.17" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.String#getBytes (521 microseconds, 1.44%)</title><rect x="236.8" y="197" width="17.0" height="15.0" fill="rgb(238,104,36)" rx="2" ry="2" />
+<text  x="239.84" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (15 microseconds, 0.04%)</title><rect x="319.0" y="133" width="0.5" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="321.97" y="143.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.Database$Companion#getSchema (21,526 microseconds, 59.52%)</title><rect x="270.5" y="213" width="702.4" height="15.0" fill="rgb(228,152,25)" rx="2" ry="2" />
+<text  x="273.52" y="223.5" >nl.tudelft.ipv8.sqldelight.Database$Companion#getSchema</text>
+</g>
+<g >
+<title>java.util.concurrent.CopyOnWriteArrayList#&lt;init&gt; (2,982 microseconds, 8.25%)</title><rect x="1056.5" y="133" width="97.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1059.54" y="143.5" >java.util.c..</text>
+</g>
+<g >
+<title>androidx.fragment.app.Fragment#requireContext (66 microseconds, 0.18%)</title><rect x="10.4" y="245" width="2.2" height="15.0" fill="rgb(230,161,27)" rx="2" ry="2" />
+<text  x="13.42" y="255.5" ></text>
+</g>
+<g >
+<title>java.lang.System#arraycopy (23 microseconds, 0.06%)</title><rect x="258.7" y="181" width="0.8" height="15.0" fill="rgb(248,104,48)" rx="2" ry="2" />
+<text  x="261.71" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.ReflectionFactoryImpl#getOrCreateKotlinClass (21,409 microseconds, 59.20%)</title><rect x="272.8" y="181" width="698.6" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="275.80" y="191.5" >kotlin.reflect.jvm.internal.ReflectionFactoryImpl#getOrCreateKotlinClass</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#plus (326 microseconds, 0.90%)</title><rect x="870.7" y="101" width="10.7" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="873.72" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#&lt;init&gt; (444 microseconds, 1.23%)</title><rect x="282.5" y="133" width="14.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="285.53" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (11 microseconds, 0.03%)</title><rect x="985.9" y="133" width="0.3" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="988.87" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Float#isNaN (14 microseconds, 0.04%)</title><rect x="154.3" y="101" width="0.5" height="15.0" fill="rgb(227,104,24)" rx="2" ry="2" />
+<text  x="157.32" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.String#getBytes (219 microseconds, 0.61%)</title><rect x="1164.7" y="197" width="7.2" height="15.0" fill="rgb(238,104,36)" rx="2" ry="2" />
+<text  x="1167.71" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (28 microseconds, 0.08%)</title><rect x="229.7" y="213" width="0.9" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="232.73" y="223.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (17 microseconds, 0.05%)</title><rect x="307.9" y="117" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="310.88" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#areEqual (18 microseconds, 0.05%)</title><rect x="297.0" y="149" width="0.6" height="15.0" fill="rgb(224,143,21)" rx="2" ry="2" />
+<text  x="300.01" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#plus (85 microseconds, 0.24%)</title><rect x="840.4" y="133" width="2.8" height="15.0" fill="rgb(238,143,36)" rx="2" ry="2" />
+<text  x="843.43" y="143.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver$statements$1#&lt;init&gt; (254 microseconds, 0.70%)</title><rect x="149.1" y="165" width="8.3" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="152.07" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.String#hashCode (15 microseconds, 0.04%)</title><rect x="986.2" y="133" width="0.5" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="989.23" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="998.9" y="149" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1001.92" y="159.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.TransactionsFragment$$ExternalSyntheticLambda0#run (36,163 microseconds, 100.00%)</title><rect x="10.0" y="293" width="1180.0" height="15.0" fill="rgb(243,152,41)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >nl.tudelft.trustchain.detoks.TransactionsFragment$$ExternalSyntheticLambda0#run</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (14 microseconds, 0.04%)</title><rect x="297.6" y="149" width="0.5" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="300.60" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (12 microseconds, 0.03%)</title><rect x="999.3" y="149" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1002.31" y="159.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration$Builder#noBackupDirectory (15 microseconds, 0.04%)</title><rect x="140.9" y="181" width="0.5" height="15.0" fill="rgb(246,161,45)" rx="2" ry="2" />
+<text  x="143.91" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (11 microseconds, 0.03%)</title><rect x="993.3" y="69" width="0.4" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="996.31" y="79.5" ></text>
+</g>
+<g >
+<title>java.lang.Integer#numberOfLeadingZeros (13 microseconds, 0.04%)</title><rect x="156.9" y="85" width="0.5" height="15.0" fill="rgb(241,104,39)" rx="2" ry="2" />
+<text  x="159.93" y="95.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.TransactionEngineBenchmark#runBenchmark$default (34,950 microseconds, 96.65%)</title><rect x="49.6" y="245" width="1140.4" height="15.0" fill="rgb(228,152,25)" rx="2" ry="2" />
+<text  x="52.58" y="255.5" >nl.tudelft.trustchain.detoks.TransactionEngineBenchmark#runBenchmark$default</text>
+</g>
+<g >
+<title>java.lang.reflect.Array#newInstance (106 microseconds, 0.29%)</title><rect x="188.5" y="149" width="3.4" height="15.0" fill="rgb(251,104,51)" rx="2" ry="2" />
+<text  x="191.49" y="159.5" ></text>
+</g>
+<g >
+<title>com.github.mikephil.charting.data.Entry#&lt;init&gt; (63 microseconds, 0.17%)</title><rect x="124.7" y="213" width="2.0" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="127.66" y="223.5" ></text>
+</g>
+<g >
+<title>java.util.Random#seedUniquifier (59 microseconds, 0.16%)</title><rect x="221.5" y="197" width="1.9" height="15.0" fill="rgb(239,104,38)" rx="2" ry="2" />
+<text  x="224.48" y="207.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImplKt#newInstance (4,933 microseconds, 13.64%)</title><rect x="993.7" y="197" width="160.9" height="15.0" fill="rgb(251,152,51)" rx="2" ry="2" />
+<text  x="996.67" y="207.5" >nl.tudelft.ipv8.sqld..</text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.Community#getMyPeer (13 microseconds, 0.04%)</title><rect x="230.6" y="213" width="0.5" height="15.0" fill="rgb(242,152,41)" rx="2" ry="2" />
+<text  x="233.64" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (68 microseconds, 0.19%)</title><rect x="173.7" y="165" width="2.3" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="176.74" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#rebalanced (120 microseconds, 0.33%)</title><rect x="881.4" y="101" width="3.9" height="15.0" fill="rgb(250,143,50)" rx="2" ry="2" />
+<text  x="884.35" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="233.0" y="197" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="235.96" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (15 microseconds, 0.04%)</title><rect x="839.9" y="85" width="0.5" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="842.94" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (79 microseconds, 0.22%)</title><rect x="226.8" y="197" width="2.6" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="229.79" y="207.5" ></text>
+</g>
+<g >
+<title>java.util.LinkedHashMap#&lt;init&gt; (174 microseconds, 0.48%)</title><rect x="151.7" y="133" width="5.7" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="154.68" y="143.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper#&lt;init&gt; (65 microseconds, 0.18%)</title><rect x="142.2" y="165" width="2.1" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="145.18" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (18 microseconds, 0.05%)</title><rect x="296.4" y="101" width="0.6" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="299.43" y="111.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver$Callback#&lt;init&gt; (781 microseconds, 2.16%)</title><rect x="166.9" y="197" width="25.5" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="169.92" y="207.5" >c..</text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Lambda#&lt;init&gt; (67 microseconds, 0.19%)</title><rect x="304.5" y="117" width="2.1" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="307.45" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.ThreadLocal#nextHashCode (39 microseconds, 0.11%)</title><rect x="159.3" y="149" width="1.3" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="162.35" y="159.5" ></text>
+</g>
+<g >
+<title>androidx.fragment.app.FragmentHostCallback#getContext (12 microseconds, 0.03%)</title><rect x="12.2" y="213" width="0.4" height="15.0" fill="rgb(230,161,27)" rx="2" ry="2" />
+<text  x="15.19" y="223.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.CopyOnWriteArrayList#setArray (57 microseconds, 0.16%)</title><rect x="1021.7" y="117" width="1.9" height="15.0" fill="rgb(239,104,37)" rx="2" ry="2" />
+<text  x="1024.73" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="126.3" y="181" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="129.33" y="191.5" ></text>
+</g>
+<g >
+<title>java.util.Random#initialScramble (13 microseconds, 0.04%)</title><rect x="219.2" y="181" width="0.4" height="15.0" fill="rgb(241,104,40)" rx="2" ry="2" />
+<text  x="222.16" y="191.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.CopyOnWriteArrayList#&lt;init&gt; (427 microseconds, 1.18%)</title><rect x="1009.7" y="133" width="13.9" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1012.65" y="143.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.Database$Companion#invoke (5,569 microseconds, 15.40%)</title><rect x="972.9" y="213" width="181.7" height="15.0" fill="rgb(242,152,41)" rx="2" ry="2" />
+<text  x="975.91" y="223.5" >nl.tudelft.ipv8.sqldeli..</text>
+</g>
+<g >
+<title>androidx.sqlite.db.SupportSQLiteOpenHelper$Configuration$Builder#callback (13 microseconds, 0.04%)</title><rect x="140.0" y="181" width="0.5" height="15.0" fill="rgb(242,161,40)" rx="2" ry="2" />
+<text  x="143.03" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.ThreadLocal#&lt;init&gt; (90 microseconds, 0.25%)</title><rect x="157.7" y="165" width="2.9" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="160.68" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.String#length (23 microseconds, 0.06%)</title><rect x="1169.4" y="181" width="0.8" height="15.0" fill="rgb(236,104,34)" rx="2" ry="2" />
+<text  x="1172.41" y="191.5" ></text>
+</g>
+<g >
+<title>androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory#&lt;init&gt; (41 microseconds, 0.11%)</title><rect x="129.7" y="197" width="1.3" height="15.0" fill="rgb(238,161,37)" rx="2" ry="2" />
+<text  x="132.65" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (47 microseconds, 0.13%)</title><rect x="165.4" y="181" width="1.5" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="168.38" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (15 microseconds, 0.04%)</title><rect x="982.8" y="149" width="0.5" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="985.80" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.Arrays#copyOf (76 microseconds, 0.21%)</title><rect x="211.4" y="133" width="2.5" height="15.0" fill="rgb(248,104,47)" rx="2" ry="2" />
+<text  x="214.39" y="143.5" ></text>
+</g>
+<g >
+<title>com.github.mikephil.charting.data.Entry$1#&lt;init&gt; (37 microseconds, 0.10%)</title><rect x="123.5" y="197" width="1.2" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="126.45" y="207.5" ></text>
+</g>
+<g >
+<title>java.util.ArrayList#add (251 microseconds, 0.69%)</title><rect x="205.7" y="197" width="8.2" height="15.0" fill="rgb(253,104,53)" rx="2" ry="2" />
+<text  x="208.68" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KClassImpl#getJClass (12 microseconds, 0.03%)</title><rect x="983.3" y="149" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="986.29" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.ReflectProperties$Val#&lt;init&gt; (47 microseconds, 0.13%)</title><rect x="310.6" y="101" width="1.6" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="313.62" y="111.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="888.1" y="85" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="891.11" y="95.5" ></text>
+</g>
+<g >
+<title>java.util.Arrays#copyOf (475 microseconds, 1.31%)</title><rect x="176.4" y="181" width="15.5" height="15.0" fill="rgb(248,104,47)" rx="2" ry="2" />
+<text  x="179.45" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (22 microseconds, 0.06%)</title><rect x="1171.9" y="197" width="0.7" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="1174.86" y="207.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTreePMap#get (176 microseconds, 0.49%)</title><rect x="987.9" y="117" width="5.8" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="990.92" y="127.5" ></text>
+</g>
+<g >
+<title>java.util.concurrent.atomic.AtomicLong#compareAndSet (12 microseconds, 0.03%)</title><rect x="222.6" y="181" width="0.4" height="15.0" fill="rgb(234,104,32)" rx="2" ry="2" />
+<text  x="225.65" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (10 microseconds, 0.03%)</title><rect x="157.4" y="165" width="0.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="160.36" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="845.0" y="117" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="847.97" y="127.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.TransactionEngineBenchmark#runBenchmark (34,916 microseconds, 96.55%)</title><rect x="50.7" y="229" width="1139.3" height="15.0" fill="rgb(237,152,35)" rx="2" ry="2" />
+<text  x="53.69" y="239.5" >nl.tudelft.trustchain.detoks.TransactionEngineBenchmark#runBenchmark</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#size (20 microseconds, 0.06%)</title><rect x="867.1" y="117" width="0.6" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="870.09" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (14 microseconds, 0.04%)</title><rect x="301.8" y="133" width="0.5" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="304.81" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Character#digit (105 microseconds, 0.29%)</title><rect x="42.8" y="213" width="3.5" height="15.0" fill="rgb(233,104,30)" rx="2" ry="2" />
+<text  x="45.83" y="223.5" ></text>
+</g>
+<g >
+<title>java.lang.System#arraycopy (25 microseconds, 0.07%)</title><rect x="262.5" y="165" width="0.8" height="15.0" fill="rgb(248,104,48)" rx="2" ry="2" />
+<text  x="265.52" y="175.5" ></text>
+</g>
+<g >
+<title>java.util.Arrays#copyOf (221 microseconds, 0.61%)</title><rect x="184.7" y="165" width="7.2" height="15.0" fill="rgb(248,104,47)" rx="2" ry="2" />
+<text  x="187.73" y="175.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.internal.FunctionsJvmKt#copyOnWriteList (541 microseconds, 1.50%)</title><rect x="1005.9" y="149" width="17.7" height="15.0" fill="rgb(232,149,30)" rx="2" ry="2" />
+<text  x="1008.93" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#rebalanced (71 microseconds, 0.20%)</title><rect x="879.0" y="69" width="2.4" height="15.0" fill="rgb(250,143,50)" rx="2" ry="2" />
+<text  x="882.04" y="79.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.TransacterImpl#&lt;init&gt; (58 microseconds, 0.16%)</title><rect x="1036.5" y="149" width="1.9" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="1039.48" y="159.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (16 microseconds, 0.04%)</title><rect x="972.4" y="181" width="0.5" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="975.39" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#rebalanced (102 microseconds, 0.28%)</title><rect x="878.0" y="85" width="3.4" height="15.0" fill="rgb(250,143,50)" rx="2" ry="2" />
+<text  x="881.02" y="95.5" ></text>
+</g>
+<g >
+<title>kotlin.LazyKt__LazyJVMKt#lazy (146 microseconds, 0.40%)</title><rect x="160.6" y="165" width="4.8" height="15.0" fill="rgb(251,143,51)" rx="2" ry="2" />
+<text  x="163.62" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#getClass (13 microseconds, 0.04%)</title><rect x="211.0" y="133" width="0.4" height="15.0" fill="rgb(240,104,38)" rx="2" ry="2" />
+<text  x="213.97" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="218.1" y="181" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="221.11" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Math#min (23 microseconds, 0.06%)</title><rect x="261.8" y="165" width="0.7" height="15.0" fill="rgb(247,104,46)" rx="2" ry="2" />
+<text  x="264.77" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.reflect.Array#newArray (76 microseconds, 0.21%)</title><rect x="189.5" y="133" width="2.4" height="15.0" fill="rgb(239,104,37)" rx="2" ry="2" />
+<text  x="192.47" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#areEqual (34 microseconds, 0.09%)</title><rect x="981.7" y="149" width="1.1" height="15.0" fill="rgb(224,143,21)" rx="2" ry="2" />
+<text  x="984.69" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (11 microseconds, 0.03%)</title><rect x="221.1" y="149" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="224.12" y="159.5" ></text>
+</g>
+<g >
+<title>java.util.Arrays#copyOf (119 microseconds, 0.33%)</title><rect x="259.5" y="181" width="3.8" height="15.0" fill="rgb(248,104,47)" rx="2" ry="2" />
+<text  x="262.46" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Class#isPrimitive (14 microseconds, 0.04%)</title><rect x="191.0" y="117" width="0.5" height="15.0" fill="rgb(238,104,36)" rx="2" ry="2" />
+<text  x="194.00" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#&lt;init&gt; (45 microseconds, 0.12%)</title><rect x="879.9" y="53" width="1.5" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="882.88" y="63.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (13 microseconds, 0.04%)</title><rect x="1005.2" y="133" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="1008.15" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#get (54 microseconds, 0.15%)</title><rect x="279.9" y="149" width="1.7" height="15.0" fill="rgb(237,104,35)" rx="2" ry="2" />
+<text  x="282.85" y="159.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImpl#getDbBlockQueries (36 microseconds, 0.10%)</title><rect x="233.7" y="197" width="1.2" height="15.0" fill="rgb(237,152,36)" rx="2" ry="2" />
+<text  x="236.74" y="207.5" ></text>
+</g>
+<g >
+<title>java.util.HashMap#tableSizeFor (39 microseconds, 0.11%)</title><rect x="156.1" y="101" width="1.3" height="15.0" fill="rgb(239,104,38)" rx="2" ry="2" />
+<text  x="159.08" y="111.5" ></text>
+</g>
+<g >
+<title>kotlin.SynchronizedLazyImpl#&lt;init&gt; (65 microseconds, 0.18%)</title><rect x="162.8" y="133" width="2.2" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="165.84" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.reflect.Array#createObjectArray (15 microseconds, 0.04%)</title><rect x="191.5" y="117" width="0.4" height="15.0" fill="rgb(239,104,37)" rx="2" ry="2" />
+<text  x="194.46" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.Math#min (20 microseconds, 0.06%)</title><rect x="212.7" y="117" width="0.6" height="15.0" fill="rgb(247,104,46)" rx="2" ry="2" />
+<text  x="215.67" y="127.5" ></text>
+</g>
+<g >
+<title>all (36,163 microseconds, 100%)</title><rect x="10.0" y="325" width="1180.0" height="15.0" fill="rgb(255,230,55)" rx="2" ry="2" />
+<text  x="13.00" y="335.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.ReflectProperties$LazyVal#&lt;init&gt; (80 microseconds, 0.22%)</title><rect x="309.5" y="117" width="2.7" height="15.0" fill="rgb(238,143,37)" rx="2" ry="2" />
+<text  x="312.54" y="127.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (39 microseconds, 0.11%)</title><rect x="239.9" y="181" width="1.3" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="242.94" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.ref.Reference#getReferent (18 microseconds, 0.05%)</title><rect x="281.0" y="133" width="0.6" height="15.0" fill="rgb(241,104,39)" rx="2" ry="2" />
+<text  x="284.03" y="143.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (22 microseconds, 0.06%)</title><rect x="204.2" y="165" width="0.7" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="207.18" y="175.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (13 microseconds, 0.04%)</title><rect x="165.0" y="149" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="167.96" y="159.5" ></text>
+</g>
+<g >
+<title>android.widget.CompoundButton#isChecked (13 microseconds, 0.04%)</title><rect x="10.0" y="245" width="0.4" height="15.0" fill="rgb(245,161,44)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>java.util.AbstractCollection#&lt;init&gt; (69 microseconds, 0.19%)</title><rect x="202.6" y="181" width="2.3" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="205.65" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.KClassCacheKt#getOrCreateKotlinClass (513 microseconds, 1.42%)</title><rect x="976.9" y="165" width="16.8" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="979.93" y="175.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="884.8" y="53" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="887.78" y="63.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (23 microseconds, 0.06%)</title><rect x="1023.6" y="149" width="0.7" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="1026.59" y="159.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (12 microseconds, 0.03%)</title><rect x="148.7" y="133" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="151.68" y="143.5" ></text>
+</g>
+<g >
+<title>java.nio.charset.Charset#name (26 microseconds, 0.07%)</title><rect x="1170.2" y="181" width="0.8" height="15.0" fill="rgb(241,104,40)" rx="2" ry="2" />
+<text  x="1173.16" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (24 microseconds, 0.07%)</title><rect x="995.2" y="181" width="0.7" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="998.17" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="970.9" y="117" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="973.89" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullExpressionValue (23 microseconds, 0.06%)</title><rect x="263.3" y="181" width="0.8" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="266.34" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.String#hashCode (49 microseconds, 0.14%)</title><rect x="319.5" y="133" width="1.6" height="15.0" fill="rgb(250,104,49)" rx="2" ry="2" />
+<text  x="322.46" y="143.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImpl#getDbBlockQueries (12 microseconds, 0.03%)</title><rect x="234.5" y="181" width="0.4" height="15.0" fill="rgb(237,152,36)" rx="2" ry="2" />
+<text  x="237.53" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#get (12 microseconds, 0.03%)</title><rect x="809.1" y="69" width="0.4" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="812.14" y="79.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.sqldelight.ipv8.DatabaseImplKt#getSchema (47 microseconds, 0.13%)</title><rect x="971.4" y="197" width="1.5" height="15.0" fill="rgb(228,152,25)" rx="2" ry="2" />
+<text  x="974.38" y="207.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (13 microseconds, 0.04%)</title><rect x="268.8" y="181" width="0.4" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="271.82" y="191.5" ></text>
+</g>
+<g >
+<title>com.squareup.sqldelight.android.AndroidSqliteDriver$Callback#&lt;init&gt; (237 microseconds, 0.66%)</title><rect x="168.7" y="181" width="7.7" height="15.0" fill="rgb(238,149,37)" rx="2" ry="2" />
+<text  x="171.71" y="191.5" ></text>
+</g>
+<g >
+<title>kotlin.jvm.internal.Intrinsics#checkNotNullParameter (12 microseconds, 0.03%)</title><rect x="164.6" y="117" width="0.4" height="15.0" fill="rgb(240,143,38)" rx="2" ry="2" />
+<text  x="167.57" y="127.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.trustchain.detoks.TransactionsFragment#runBenchmarkWithType$lambda-14$lambda-13 (36,163 microseconds, 100.00%)</title><rect x="10.0" y="261" width="1180.0" height="15.0" fill="rgb(241,152,40)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >nl.tudelft.trustchain.detoks.TransactionsFragment#runBenchmarkWithType$lambda-14$lambda-13</text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.ConsPStack#size (26 microseconds, 0.07%)</title><rect x="843.2" y="133" width="0.9" height="15.0" fill="rgb(245,143,44)" rx="2" ry="2" />
+<text  x="846.21" y="143.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#get (15,243 microseconds, 42.15%)</title><rect x="312.2" y="149" width="497.3" height="15.0" fill="rgb(237,143,35)" rx="2" ry="2" />
+<text  x="315.15" y="159.5" >kotlin.reflect.jvm.internal.pcollections.HashPMap#get</text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (15 microseconds, 0.04%)</title><rect x="880.9" y="37" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="883.86" y="47.5" ></text>
+</g>
+<g >
+<title>nl.tudelft.ipv8.attestation.trustchain.store.TrustChainSQLiteStore#&lt;init&gt; (106 microseconds, 0.29%)</title><rect x="231.5" y="213" width="3.4" height="15.0" fill="rgb(238,152,37)" rx="2" ry="2" />
+<text  x="234.46" y="223.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.IntTree#rebalanced (78 microseconds, 0.22%)</title><rect x="882.7" y="85" width="2.6" height="15.0" fill="rgb(250,143,50)" rx="2" ry="2" />
+<text  x="885.72" y="95.5" ></text>
+</g>
+<g >
+<title>java.lang.String#equals (24 microseconds, 0.07%)</title><rect x="1168.6" y="181" width="0.8" height="15.0" fill="rgb(235,104,33)" rx="2" ry="2" />
+<text  x="1171.63" y="191.5" ></text>
+</g>
+<g >
+<title>java.lang.Object#&lt;init&gt; (13 microseconds, 0.04%)</title><rect x="164.1" y="117" width="0.5" height="15.0" fill="rgb(238,104,37)" rx="2" ry="2" />
+<text  x="167.14" y="127.5" ></text>
+</g>
+<g >
+<title>kotlin.reflect.jvm.internal.pcollections.HashPMap#getEntries (555 microseconds, 1.53%)</title><rect x="845.5" y="133" width="18.1" height="15.0" fill="rgb(237,143,36)" rx="2" ry="2" />
+<text  x="848.46" y="143.5" ></text>
+</g>
+</g>
+</svg>
