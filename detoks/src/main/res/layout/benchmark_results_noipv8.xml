@@ -18,22 +18,21 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="Please specify how many blocks you want to benchmark or how many milliseconds you want to run the benchmark. Also specify what this field contains by selecting the corerct value in the radiobutton."
-            app:layout_constraintEnd_toEndOf="parent"
+            android:text="Time in miliseconds or number of blocks:"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/benchmarkTypeTextView" />
 
         <EditText
             android:id="@+id/benchmarkCountDurationEditText"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:ems="10"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:inputType="number|text"
-            android:outlineProvider="bounds"
+            android:hint="1000"
+            android:inputType="number"
+            android:textColorHint="#6C6C6C"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/enterBlockCountMessage" />
@@ -52,7 +51,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Time" />
+                android:text="Time (ms)" />
 
             <RadioButton
                 android:id="@+id/blocksRadioButton"
@@ -67,13 +66,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Graph resolution can be specifed in this field:"
+            android:text="Graph resolution"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/radioGroup" />
 
         <EditText
             android:id="@+id/graphResolutionEditText"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:ems="10"
@@ -81,7 +80,9 @@
             android:focusableInTouchMode="true"
             android:hint="10"
 
-            android:inputType="numberSigned"
+            android:inputType="number"
+            android:textColorHint="#6C6C6C"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/graphResolutionMessage" />
 
@@ -105,33 +106,28 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <TextView
+            android:id="@+id/textView6"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+            android:text="X-axis: number of blocks, Y-axis: average time per block in miliseconds"
+            app:layout_constraintTop_toBottomOf="@+id/benchmarkLineChart"
+            tools:layout_editor_absoluteX="8dp" />
+
         <com.github.mikephil.charting.charts.LineChart
             android:id="@+id/benchmarkLineChart"
             android:layout_width="0dp"
             android:layout_height="300dp"
             android:layout_marginTop="5dp"
-            android:layout_marginBottom="5dp"
             android:padding="9dp"
-            app:layout_constraintBottom_toTopOf="@+id/benchmarkBandwithLineChart"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/runBenchmarkButton" />
 
-        <com.github.mikephil.charting.charts.LineChart
-            android:id="@+id/benchmarkBandwithLineChart"
-            android:layout_width="0dp"
-            android:layout_height="300dp"
-            android:layout_marginTop="5dp"
-            android:layout_marginBottom="5dp"
-            android:padding="9dp"
-            app:layout_constraintBottom_toTopOf="@+id/linearLayout"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/benchmarkLineChart" />
-
         <LinearLayout
             android:id="@+id/linearLayout"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -142,15 +138,15 @@
                 android:id="@+id/bandwithMessage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:layout_weight="0.8"
                 android:text="Payload bandwith: " />
 
             <TextView
                 android:id="@+id/bandwithValueTextView"
-                android:layout_width="wrap_content"
+                android:layout_width="30dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="TextView"
+                android:layout_weight="0.3"
+                android:text="0 MB/s"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -158,24 +154,27 @@
             android:id="@+id/linearLayout2"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="15dp"
             android:orientation="horizontal"
             app:layout_constraintBottom_toTopOf="@+id/linearLayout"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent">
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textView6">
 
             <TextView
                 android:id="@+id/totalTimeMessage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:layout_weight="0.8"
                 android:text="Total Time: " />
 
             <TextView
                 android:id="@+id/totalTimeValueTextView"
-                android:layout_width="wrap_content"
+                android:layout_width="30dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="TextView" />
+                android:layout_weight="0.25"
+                android:text="0 ms"
+                android:textStyle="bold" />
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

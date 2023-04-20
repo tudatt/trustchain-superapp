@@ -12,10 +12,12 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.components.YAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.transactions_fragment_layout.*
 import nl.tudelft.ipv8.*
 import nl.tudelft.ipv8.android.IPv8Android
@@ -118,6 +120,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         )
 
         startComparisonButton.setOnClickListener {
+            allLineData.clear()
 
 
             Thread(Runnable {
@@ -257,7 +260,9 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         val benchmarkTypeTextView = benchmarkResultView.findViewById<TextView>(
             R.id.benchmarkTypeTextView
         )
-        benchmarkTypeTextView.text = "Benchmark: $type"
+
+
+        benchmarkTypeTextView.text = "Benchmark"
         val durationCountEditText = benchmarkResultView.findViewById<EditText>(
             R.id.benchmarkCountDurationEditText
         )
@@ -296,7 +301,7 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
         lineChart.setPinchZoom(true)
 
         lineChart.description.text = "Days"
-        lineChart.setNoDataText("No forex yet!")
+        lineChart.setNoDataText("Waiting for benchmark data")
 
         runBenchmarkButton.setOnClickListener {
             var resolution = graphResolutionEditText.text.toString()
@@ -311,6 +316,10 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
                 } else {
                     "1000"
                 }
+            }
+            if (Integer.parseInt(blocksOrTime) <= 0) {
+                Snackbar.make(benchmarkResultView, "This number needs to be greater than 0.", Snackbar.LENGTH_LONG).show()
+                return@setOnClickListener
             }
 
             // Initialize our BenchmarkResult with a dumb value
@@ -424,11 +433,14 @@ class TransactionsFragment: BaseFragment(R.layout.transactions_fragment_layout),
 
                 val df = DecimalFormat("#.##")
                 df.roundingMode = RoundingMode.DOWN
-                val roundoff = df.format(result.payloadBandwith)
+//                val roundoff = df.format(result.payloadBandwith)
                 activity?.runOnUiThread {
                     totalTimeTextView.text = (result.totalTime / 1000000).toDouble().toString()
-                    bandwithTextView.text = roundoff
-                    val dataset = LineDataSet(result.timePerBlock, "time per block")
+                    bandwithTextView.text = result.payloadBandwith.toString()
+                    val dataset = LineDataSet(result.timePerBlock, "time per block (ms)")
+                    var yAxis : YAxis = lineChart.axisRight
+                    lineChart.setNoDataText("Waiting for benchmark results")
+                    yAxis.isEnabled = false
                     dataset.setDrawValues(false)
                     dataset.lineWidth = 3f
                     lineChart.data = LineData(dataset)
