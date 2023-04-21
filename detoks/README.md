@@ -19,7 +19,7 @@ Each member function of the `TransactionEngineBenchmark` class contains a number
 By building up the functionality of the app's transaction processing capabilities, we were able to identify and optimize specific parts of a transaction that are causing performance issues.
 Flame graphs were generated using these functions to help us to visualize and isolate performance bottlenecks for further optimization.
 
-We analyzed the performance of the Transaction Engine through a number of benchmarks, analysing the bottlenecks by using Brendan's Gregg tool, `flamegraphs`. Below, we list the different benchmarks:   
+We analyzed the performance of the Transaction Engine through a number of benchmarks, analysing the bottlenecks by using Brendan's Gregg tool, `flamegraphs` (see https://www.brendangregg.com/flamegraphs.html) and an erlang flamegraph visualization tool for android (see https://github.com/rschlaikjer/erlang-atrace-flamegraphs/).   Below, we list the different benchmarks:   
  * creating unencrypted basic blocks with the same content (payload and addresses)  
  * creating unencrypted basic blocks with random content (payload and addresses)  
  * creating unencrypted signed blocks with random content (payload and addresses)
